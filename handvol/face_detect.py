@@ -1,20 +1,17 @@
-"""MediaPipe Face Landmarker wrapper + landmark-to-embedding helper.
+"""MediaPipe Face Landmarker wrapper + bbox helper.
 
 The embedder runs in LIVE_STREAM mode, mirroring the gesture recognizer
-pattern in capture.py. The embedding helper is intentionally a pure
-function so it can be unit-tested without the model or a camera.
+pattern in capture.py.
 """
 import threading
 import time
 from pathlib import Path
 
 import mediapipe as mp
-import numpy as np
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision as mp_vision
 
 
-EXPECTED_LANDMARK_COUNT = 478  # MediaPipe Face Landmarker output
 FACE_MODEL_FILENAME = "face_landmarker.task"
 
 _DEFAULT_MODEL_PATH = (
@@ -23,33 +20,27 @@ _DEFAULT_MODEL_PATH = (
 MAX_FACES = 3  # Spec: if any face in frame matches, allow gestures.
 
 
-def landmarks_to_embedding(landmarks):
-    """Convert face landmarks to a translation+scale-invariant identity vector.
+def landmarks_to_bbox(face_landmarks, frame_shape):
+    """Compute the pixel bbox enclosing a MediaPipe face landmark list.
 
-    Steps:
-      1. Stack the (x, y, z) of each NormalizedLandmark into an (N, 3) array.
-      2. Subtract the centroid so the embedding is invariant to where the
-         face is located in the frame.
-      3. Divide by the RMS distance from the centroid so it is invariant to
-         how close the face is to the camera.
-      4. Flatten to a 1-D vector; cosine similarity on this vector compares
-         relative facial geometry, which is the part that is identity-bearing.
+    `face_landmarks` is a list of NormalizedLandmark objects (478 entries
+    from the Face Landmarker). `frame_shape` is `(h, w)` or `(h, w, c)`.
 
-    Returns None if the input is missing or has fewer landmarks than the
-    Face Landmarker is expected to emit.
+    Returns `(top, right, bottom, left)` in pixel coords — the format
+    `face_recognition.face_encodings`' `known_face_locations` parameter
+    expects. Returns None for empty input.
     """
-    if not landmarks or len(landmarks) < EXPECTED_LANDMARK_COUNT:
+    if not face_landmarks:
         return None
-    pts = np.asarray(
-        [(lm.x, lm.y, lm.z) for lm in landmarks[:EXPECTED_LANDMARK_COUNT]],
-        dtype=np.float32,
-    )
-    pts -= pts.mean(axis=0, keepdims=True)
-    scale = float(np.sqrt((pts ** 2).sum() / pts.shape[0]))
-    if scale < 1e-9:
-        return None
-    pts /= scale
-    return pts.reshape(-1)
+    h = frame_shape[0]
+    w = frame_shape[1]
+    xs = [lm.x for lm in face_landmarks]
+    ys = [lm.y for lm in face_landmarks]
+    left = max(0, int(min(xs) * w))
+    right = min(w, int(max(xs) * w))
+    top = max(0, int(min(ys) * h))
+    bottom = min(h, int(max(ys) * h))
+    return (top, right, bottom, left)
 
 
 class FaceEmbedder:
@@ -63,7 +54,6 @@ class FaceEmbedder:
     def __init__(self, model_path=None):
         self.model_path = str(model_path or _DEFAULT_MODEL_PATH)
         self._lock = threading.Lock()
-        self._latest_embeddings: list = []  # list[np.ndarray]
         self._latest_face_landmarks: list = []  # list[list[NormalizedLandmark]]
         self._latest_ts_ns = 0
         self._landmarker = None
@@ -89,30 +79,20 @@ class FaceEmbedder:
         self._landmarker.detect_async(mp_image, ts_ms)
 
     def latest(self):
-        """Return (embeddings_list, face_landmarks_list, ts_ns).
+        """Return (face_landmarks_list, ts_ns).
 
-        embeddings_list and face_landmarks_list are aligned: index i in
-        each refers to the same detected face. Both are empty when no
-        face was detected in the most recent frame.
+        face_landmarks_list is a list of lists of NormalizedLandmark, one
+        inner list per detected face. Empty when no face was detected in
+        the most recent frame.
         """
         with self._lock:
-            return (
-                list(self._latest_embeddings),
-                list(self._latest_face_landmarks),
-                self._latest_ts_ns,
-            )
+            return list(self._latest_face_landmarks), self._latest_ts_ns
 
     def _on_result(self, result, output_image, timestamp_ms):
-        embeddings: list = []
         face_landmarks_list: list = []
         if result.face_landmarks:
-            for face in result.face_landmarks:
-                emb = landmarks_to_embedding(face)
-                if emb is not None:
-                    embeddings.append(emb)
-                    face_landmarks_list.append(face)
+            face_landmarks_list = list(result.face_landmarks)
         with self._lock:
-            self._latest_embeddings = embeddings
             self._latest_face_landmarks = face_landmarks_list
             self._latest_ts_ns = time.monotonic_ns()
 
