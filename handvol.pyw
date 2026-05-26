@@ -11,6 +11,12 @@ from handvol.capture import GestureSource, MODEL_PATH
 from handvol.scrubber import VolumeScrubber
 from handvol.state import GestureStateMachine, State, Event
 
+import os
+import subprocess
+import sys
+
+from handvol.face_profile import FaceProfile, DEFAULT_PROFILE_PATH
+
 
 INDEX_TIP = 8  # MediaPipe landmark index for the index fingertip
 THUMB_TIP = 4  # MediaPipe landmark index for the thumb tip
@@ -82,7 +88,7 @@ def make_volume_image(level, dimmed=False):
     return img
 
 
-def capture_loop(args, show_evt, worker_stop, icon):
+def capture_loop(args, show_evt, worker_stop, icon, profile_state):
     """Runs on a worker thread. Owns the camera, the model, and (when toggled
     on) the OpenCV window. cv2 + overlay are imported here so we only pay the
     cost when the worker actually starts. worker_stop is signaled both for
@@ -91,7 +97,7 @@ def capture_loop(args, show_evt, worker_stop, icon):
     import cv2
     from handvol.overlay import (
         draw_state, draw_gesture, draw_volume, draw_fps,
-        draw_landmarks, draw_scrub_indicator,
+        draw_landmarks, draw_scrub_indicator, draw_lock_state,
     )
 
     scrubber = VolumeScrubber(sensitivity=args.sensitivity, smoothing=args.smoothing)
@@ -102,6 +108,9 @@ def capture_loop(args, show_evt, worker_stop, icon):
     last_state = None
     window_open = False
     last_rendered_vol = None
+    NO_FACE_GRACE_FRAMES = 15
+    no_face_streak = NO_FACE_GRACE_FRAMES  # start locked until proven otherwise
+    last_recognized = False
 
     with GestureSource(cam_index=args.cam) as source:
         while not worker_stop.is_set():
@@ -109,8 +118,28 @@ def capture_loop(args, show_evt, worker_stop, icon):
             if frame is None:
                 break
 
-            gesture, score, landmarks = (latest if latest else ("None", 0.0, None))
-            event = machine.step(gesture)
+            if latest is None:
+                gesture, score, landmarks, face_embs = ("None", 0.0, None, [])
+            else:
+                gesture, score, landmarks, face_embs = latest
+
+            profile = profile_state["profile"]
+            if profile is None or profile.capture_count == 0:
+                recognized = False
+            elif not face_embs:
+                no_face_streak += 1
+                recognized = last_recognized if no_face_streak < NO_FACE_GRACE_FRAMES else False
+            else:
+                no_face_streak = 0
+                # Spec: if ANY face in frame matches the profile, unlock.
+                recognized = any(profile.matches(e)[0] for e in face_embs)
+            last_recognized = recognized
+
+            # Drop gesture if the user is not recognized; the state machine
+            # then sees a stream of "None" and gracefully exits any active
+            # SCRUB / etc. without us having to special-case it.
+            effective_gesture = gesture if recognized else "None"
+            event = machine.step(effective_gesture)
 
             if event is Event.ENTER_SCRUB and landmarks is not None:
                 _, tip_y = scrub_tip(landmarks)
@@ -180,6 +209,11 @@ def capture_loop(args, show_evt, worker_stop, icon):
                 draw_state(frame, machine.state.value)
                 draw_gesture(frame, gesture, score)
                 draw_volume(frame, vol_now)
+                draw_lock_state(
+                    frame, recognized,
+                    has_profile=(profile_state["profile"] is not None
+                                 and profile_state["profile"].capture_count > 0),
+                )
                 if machine.state is State.SCRUB and scrubber.active and landmarks is not None:
                     tip_x, tip_y = scrub_tip(landmarks)
                     draw_scrub_indicator(frame, scrubber.anchor_y, tip_y, tip_x)
@@ -234,6 +268,9 @@ def main():
     if args.show:
         show_evt.set()
 
+    # Mutable holder so on_calibrate can swap in a freshly loaded profile.
+    profile_state = {"profile": FaceProfile.load(DEFAULT_PROFILE_PATH)}
+
     # Mutable holders so the closures below can rebuild the worker on resume
     # without nonlocal gymnastics.
     paused = {"v": False}
@@ -243,7 +280,7 @@ def main():
         worker_state["stop"] = threading.Event()
         worker_state["thread"] = threading.Thread(
             target=capture_loop,
-            args=(args, show_evt, worker_state["stop"], icon),
+            args=(args, show_evt, worker_state["stop"], icon, profile_state),
             daemon=True)
         worker_state["thread"].start()
 
@@ -274,6 +311,26 @@ def main():
                 vol = 0
             icon.icon = make_volume_image(vol, dimmed=True)
 
+    def on_calibrate(icon, item):
+        # Stop the capture worker so the camera is free, run calibration
+        # in a subprocess (blocks the tray callback thread, which is fine
+        # for pystray), then reload the profile and restart the worker.
+        stop_worker()
+        try:
+            python = sys.executable
+            # If we were launched by pythonw, switch to python for the
+            # calibration so OpenCV's imshow window is interactable.
+            if python.lower().endswith("pythonw.exe"):
+                python = python[: -len("pythonw.exe")] + "python.exe"
+            subprocess.run(
+                [python, "-m", "handvol.calibration", "--force"],
+                check=False,
+            )
+        finally:
+            profile_state["profile"] = FaceProfile.load(DEFAULT_PROFILE_PATH)
+            if not paused["v"]:
+                start_worker()
+
     def on_quit(icon, item):
         stop_worker()
         icon.stop()
@@ -283,6 +340,7 @@ def main():
                  checked=lambda item: show_evt.is_set()),
         MenuItem("Pause", on_pause,
                  checked=lambda item: paused["v"]),
+        MenuItem("Calibrate face...", on_calibrate),
         MenuItem("Quit", on_quit),
     )
     # Initial glyph: show the current volume immediately so the icon isn't
