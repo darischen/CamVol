@@ -25,6 +25,7 @@ import mediapipe as mp
 
 from handvol.face_detect import FaceEmbedder
 from handvol.face_profile import FaceProfile, DEFAULT_PROFILE_PATH
+from handvol.overlay import draw_face_landmarks
 
 
 # Each pose: short label + instruction text shown to the user.
@@ -94,6 +95,12 @@ def _capture_pose(cap, embedder, label, instruction, idx, total):
         ts_ms = int((time.monotonic_ns() // 1_000_000))
         embedder.submit(mp_image, ts_ms)
 
+        # Always pull the latest result so we can overlay the dots while
+        # the user is settling into the pose.
+        embs, face_lms, _ = embedder.latest()
+        if face_lms:
+            draw_face_landmarks(frame, face_lms)
+
         elapsed = time.monotonic() - countdown_start
 
         if elapsed < COUNTDOWN_SECONDS:
@@ -103,7 +110,6 @@ def _capture_pose(cap, embedder, label, instruction, idx, total):
                 f"Hold still... {remaining:.1f}", (60, 220, 240),
             )
         else:
-            embs, _ = embedder.latest()
             if embs:
                 # During calibration the user is alone in frame; the first
                 # detected face is the right one.
