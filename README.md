@@ -38,6 +38,20 @@ Install dependencies directly into your system Python (no virtualenv):
 pip install -r requirements.txt
 ```
 
+### Installing dlib on Windows
+
+`face_recognition` depends on `dlib`, which has no official Windows
+wheel on PyPI. Install a community-built wheel for your Python version
+**before** running `pip install -r requirements.txt`:
+
+1. Download a matching wheel from https://github.com/z-mahmud22/Dlib_Windows_Python3.x/releases (or any trusted source).
+2. `pip install path\to\dlib-19.xx.x-cpxx-cpxx-win_amd64.whl`
+3. Then run `pip install -r requirements.txt`.
+
+dlib runs on CPU only via this wheel. Face encoding takes ~30-80 ms per
+call; the runtime loop throttles it to ~3 Hz so the main FPS is
+unaffected.
+
 Download the MediaPipe gesture model bundle into `models/`:
 
 ```
