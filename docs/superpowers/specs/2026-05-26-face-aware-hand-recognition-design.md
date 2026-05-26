@@ -34,10 +34,16 @@ ignored and the system enters a "locked" state.
 ## User Flow
 
 ### First-run calibration
-1. User runs `python -m handvol.calibration` (or via a tray menu item).
+1. User triggers calibration via the tray icon's right-click menu
+   (new **Calibrate face...** item) or by running
+   `python -m handvol.calibration` from the command line.
 2. A camera preview opens with on-screen prompts.
 3. The user is guided through ~20 face captures at multiple angles and
-   distances, all at a **neutral resting expression**:
+   distances, all at a **neutral resting expression**. Headphones
+   (including over-ear) are fine — face embeddings rely on inner-face
+   features. The user is prompted to briefly remove over-ear headphones
+   for the two profile-view captures so the ear/jawline outline is
+   visible.
    - Center (looking at camera) — 3 distances (close, medium, far)
    - Up, down, left, right
    - Diagonals: up-left, up-right, down-left, down-right
@@ -79,9 +85,12 @@ FaceProfile
         # returns (is_match, max_similarity)
 ```
 
-- Storage location: `%APPDATA%/handvol/face_profile.npz` on Windows.
+- Storage location: `data/face_profile.npz` at the repo root.
   Single `.npz` file holding the embeddings array plus metadata
   (creation date, capture count, calibration version).
+- **Security:** Face embeddings are biometric data and must never be
+  committed. The `data/` directory is added to `.gitignore` as part
+  of this change.
 - `matches()` computes cosine similarity vector and returns whether
   the max meets the threshold.
 
@@ -118,8 +127,12 @@ in `capture.py`.
 
 - On startup, attempt to load the face profile.
 - If no profile exists, the app starts in a "needs calibration"
-  state: gestures are blocked, and the tray menu shows a "Calibrate
-  face..." item that launches `handvol.calibration`.
+  state: gestures are blocked until calibration runs.
+- The tray icon's right-click menu always shows a **Calibrate
+  face...** item that launches the calibration flow as a subprocess
+  (`pythonw.exe -m handvol.calibration`). When invoked from the tray,
+  the main HandVol loop pauses face/gesture processing until the
+  calibration process exits, then reloads the profile.
 - The main loop reads `face_recognized` from the capture result and
   gates the existing event dispatch on it.
 - The overlay (`overlay.py`) gets a small lock-state indicator.
@@ -213,6 +226,19 @@ main loop reads gesture + face_recognized   │
   triggers after the grace period.
 - Re-test all existing gestures (point, fist, palm, victory, OK sign,
   thumbs up/down, ILoveYou) to confirm no regressions.
+
+## Security & Privacy
+
+- Face embeddings are biometric identifiers. Even though they are not
+  raw images, treating them as sensitive is best practice.
+- The profile file (`data/face_profile.npz`) lives at the repo root
+  but the `data/` directory is gitignored. A `.gitignore` entry for
+  `data/` is added as part of this change.
+- No telemetry, no network calls. The profile never leaves the user's
+  machine.
+- v1 does not implement liveness detection; a printed photo of the
+  user's face could in principle unlock gestures. This is acceptable
+  for a home/office volume-control use case and noted as future work.
 
 ## Open Questions
 
