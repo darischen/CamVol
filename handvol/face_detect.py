@@ -4,13 +4,23 @@ The embedder runs in LIVE_STREAM mode, mirroring the gesture recognizer
 pattern in capture.py. The embedding helper is intentionally a pure
 function so it can be unit-tested without the model or a camera.
 """
+import threading
+import time
 from pathlib import Path
 
+import mediapipe as mp
 import numpy as np
+from mediapipe.tasks import python as mp_python
+from mediapipe.tasks.python import vision as mp_vision
 
 
 EXPECTED_LANDMARK_COUNT = 478  # MediaPipe Face Landmarker output
 FACE_MODEL_FILENAME = "face_landmarker.task"
+
+_DEFAULT_MODEL_PATH = (
+    Path(__file__).resolve().parent.parent / "models" / FACE_MODEL_FILENAME
+)
+MAX_FACES = 3  # Spec: if any face in frame matches, allow gestures.
 
 
 def landmarks_to_embedding(landmarks):
@@ -40,3 +50,66 @@ def landmarks_to_embedding(landmarks):
         return None
     pts /= scale
     return pts.reshape(-1)
+
+
+class FaceEmbedder:
+    """MediaPipe Face Landmarker in LIVE_STREAM mode.
+
+    Submit frames with `submit(mp_image, ts_ms)`; the latest list of
+    embeddings (one per detected face, up to MAX_FACES) is available via
+    `latest()`. Mirrors the GestureSource async pattern in capture.py.
+    """
+
+    def __init__(self, model_path=None):
+        self.model_path = str(model_path or _DEFAULT_MODEL_PATH)
+        self._lock = threading.Lock()
+        self._latest_embeddings: list = []  # list[np.ndarray]
+        self._latest_ts_ns = 0
+        self._landmarker = None
+
+    def open(self) -> None:
+        base_opts = mp_python.BaseOptions(model_asset_path=self.model_path)
+        opts = mp_vision.FaceLandmarkerOptions(
+            base_options=base_opts,
+            running_mode=mp_vision.RunningMode.LIVE_STREAM,
+            num_faces=MAX_FACES,
+            result_callback=self._on_result,
+        )
+        self._landmarker = mp_vision.FaceLandmarker.create_from_options(opts)
+
+    def close(self) -> None:
+        if self._landmarker is not None:
+            self._landmarker.close()
+            self._landmarker = None
+
+    def submit(self, mp_image, ts_ms: int) -> None:
+        if self._landmarker is None:
+            return
+        self._landmarker.detect_async(mp_image, ts_ms)
+
+    def latest(self):
+        """Return (embeddings_list, ts_ns) of the most recent result.
+
+        embeddings_list is a list of embeddings (numpy arrays). Empty if no
+        face was detected in the most recent frame.
+        """
+        with self._lock:
+            return list(self._latest_embeddings), self._latest_ts_ns
+
+    def _on_result(self, result, output_image, timestamp_ms):
+        embeddings: list = []
+        if result.face_landmarks:
+            for face in result.face_landmarks:
+                emb = landmarks_to_embedding(face)
+                if emb is not None:
+                    embeddings.append(emb)
+        with self._lock:
+            self._latest_embeddings = embeddings
+            self._latest_ts_ns = time.monotonic_ns()
+
+    def __enter__(self):
+        self.open()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
