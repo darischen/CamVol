@@ -161,9 +161,14 @@ def capture_loop(args, show_evt, quit_evt, icon):
                 draw_fps(frame, fps)
                 cv2.imshow(WINDOW_TITLE, frame)
                 window_open = True
-                # Esc inside the window also hides the preview
-                if cv2.waitKey(1) & 0xFF == 27:
+                # Esc inside the window or clicking X closes the window and clears the flag
+                key = cv2.waitKey(1) & 0xFF
+                if key == 27:  # Esc
                     show_evt.clear()
+                elif cv2.getWindowProperty(WINDOW_TITLE, cv2.WND_PROP_VISIBLE) < 1:
+                    # Window was closed by clicking the X button
+                    show_evt.clear()
+                    window_open = False
             elif window_open:
                 cv2.destroyWindow(WINDOW_TITLE)
                 # waitKey is needed for destroyWindow to actually process on some builds
