@@ -6,7 +6,7 @@ from collections import deque
 from PIL import Image, ImageDraw, ImageFont
 from pystray import Icon, Menu, MenuItem
 
-from handvol import audio, media
+from handvol import audio, media, spotify
 from handvol.capture import GestureSource, MODEL_PATH
 from handvol.scrubber import VolumeScrubber
 from handvol.state import GestureStateMachine, State, Event
@@ -122,6 +122,11 @@ def capture_loop(args, show_evt, quit_evt, icon):
                 if not args.no_audio:
                     media.play_pause()
 
+            elif event is Event.FOCUS_SPOTIFY:
+                result = spotify.focus_or_launch()
+                if args.debug:
+                    print(f"  spotify: {result}")
+
             now = time.monotonic()
             dt = now - last_t
             last_t = now
@@ -169,6 +174,7 @@ def capture_loop(args, show_evt, quit_evt, icon):
                 if args.debug or event in (
                     Event.ENTER_SCRUB, Event.EXIT_SCRUB,
                     Event.TOGGLE_MUTE, Event.TOGGLE_PLAYPAUSE,
+                    Event.FOCUS_SPOTIFY,
                 ):
                     print(f"[{machine.state.value:14s}] gesture={gesture:14s} "
                           f"event={event.value:18s} fps={fps:5.1f}")

@@ -14,6 +14,7 @@ class Event(str, Enum):
     EXIT_SCRUB = "exit_scrub"
     TOGGLE_MUTE = "toggle_mute"
     TOGGLE_PLAYPAUSE = "toggle_playpause"
+    FOCUS_SPOTIFY = "focus_spotify"
 
 
 SCRUB_ENTER_FRAMES = 5
@@ -24,6 +25,7 @@ COOLDOWN_FRAMES = 10
 POINTING = "Pointing_Up"
 FIST = "Closed_Fist"
 PALM = "Open_Palm"
+VICTORY = "Victory"
 
 
 class GestureStateMachine:
@@ -39,6 +41,7 @@ class GestureStateMachine:
         self._non_point_count = 0
         self._fist_count = 0
         self._palm_count = 0
+        self._victory_count = 0
         self._neutral_count = 0
         self._cooldown_left = 0
 
@@ -47,13 +50,15 @@ class GestureStateMachine:
         self._non_point_count = 0
         self._fist_count = 0
         self._palm_count = 0
+        self._victory_count = 0
         self._neutral_count = 0
 
     def _bump(self, gesture):
         self._point_count = self._point_count + 1 if gesture == POINTING else 0
         self._fist_count = self._fist_count + 1 if gesture == FIST else 0
         self._palm_count = self._palm_count + 1 if gesture == PALM else 0
-        if gesture in (POINTING, FIST, PALM):
+        self._victory_count = self._victory_count + 1 if gesture == VICTORY else 0
+        if gesture in (POINTING, FIST, PALM, VICTORY):
             self._neutral_count = 0
         else:
             self._neutral_count += 1
@@ -81,6 +86,11 @@ class GestureStateMachine:
                 self._cooldown_left = COOLDOWN_FRAMES
                 self._reset_counters()
                 return Event.TOGGLE_PLAYPAUSE
+            if self._victory_count >= TOGGLE_FRAMES:
+                self.state = State.IDLE_COOLDOWN
+                self._cooldown_left = COOLDOWN_FRAMES
+                self._reset_counters()
+                return Event.FOCUS_SPOTIFY
             return Event.NONE
 
         if self.state is State.SCRUB:

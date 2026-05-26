@@ -9,6 +9,7 @@ to play/pause.
 | ☝️ Point up | Hold and move up/down to scrub volume |
 | ✊ Closed fist | Toggle mute |
 | ✋ Open palm | Toggle play/pause |
+| ✌️ Victory | Focus Spotify (launch it if not running) |
 
 No model training, no cloud calls, no per-app permissions. Runs locally
 off the pretrained MediaPipe Gesture Recognizer.
