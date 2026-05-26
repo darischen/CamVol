@@ -23,7 +23,8 @@ from pathlib import Path
 import cv2
 import mediapipe as mp
 
-from handvol.face_detect import FaceEmbedder
+from handvol.face_detect import FaceEmbedder, landmarks_to_bbox
+from handvol.face_identity import compute_identity_embedding
 from handvol.face_profile import FaceProfile, DEFAULT_PROFILE_PATH
 from handvol.overlay import draw_face_landmarks
 
@@ -79,7 +80,7 @@ def _draw_pose_screen(frame, label, instruction, idx, total, status_text, status
 
 
 def _capture_pose(cap, embedder, label, instruction, idx, total):
-    """Run countdown then collect a single embedding for this pose.
+    """Run countdown then collect a single dlib embedding for this pose.
 
     Returns the embedding, or None if the user pressed Q.
     Retries forever within the timeout if no face is detected.
@@ -92,12 +93,12 @@ def _capture_pose(cap, embedder, label, instruction, idx, total):
         frame = cv2.flip(frame, 1)
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-        ts_ms = int((time.monotonic_ns() // 1_000_000))
+        ts_ms = int(time.monotonic_ns() // 1_000_000)
         embedder.submit(mp_image, ts_ms)
 
-        # Always pull the latest result so we can overlay the dots while
-        # the user is settling into the pose.
-        embs, face_lms, _ = embedder.latest()
+        # Pull the most recent MediaPipe result so we can draw the dot
+        # overlay and (when ready) build a bbox for dlib.
+        face_lms, _ = embedder.latest()
         if face_lms:
             draw_face_landmarks(frame, face_lms)
 
@@ -110,21 +111,33 @@ def _capture_pose(cap, embedder, label, instruction, idx, total):
                 f"Hold still... {remaining:.1f}", (60, 220, 240),
             )
         else:
-            if embs:
-                # During calibration the user is alone in frame; the first
-                # detected face is the right one.
-                emb = embs[0]
+            if face_lms:
+                # Use the first detected face (user is alone during
+                # calibration). Compute bbox + synchronous dlib encode.
+                bbox = landmarks_to_bbox(face_lms[0], frame.shape)
+                emb = compute_identity_embedding(rgb, bbox) if bbox else None
+                if emb is not None:
+                    _draw_pose_screen(
+                        frame, label, instruction, idx, len(POSES),
+                        "Captured!", (80, 220, 120),
+                    )
+                    cv2.imshow(WINDOW_TITLE, frame)
+                    cv2.waitKey(250)  # brief confirmation flash
+                    return emb
+                # bbox existed but dlib couldn't encode — treat as
+                # "no face" and keep trying.
+                if elapsed > COUNTDOWN_SECONDS + PER_POSE_TIMEOUT_SECONDS:
+                    countdown_start = time.monotonic()
+                    continue
                 _draw_pose_screen(
                     frame, label, instruction, idx, len(POSES),
-                    "Captured!", (80, 220, 120),
+                    "Encoding failed — adjust position", (80, 80, 240),
                 )
-                cv2.imshow(WINDOW_TITLE, frame)
-                cv2.waitKey(250)  # brief confirmation flash
-                return emb
             else:
-                # No face yet - keep trying until timeout, then restart countdown.
+                # No MediaPipe face yet — keep trying until timeout,
+                # then restart countdown.
                 if elapsed > COUNTDOWN_SECONDS + PER_POSE_TIMEOUT_SECONDS:
-                    countdown_start = time.monotonic()  # restart pose
+                    countdown_start = time.monotonic()
                     continue
                 _draw_pose_screen(
                     frame, label, instruction, idx, len(POSES),
