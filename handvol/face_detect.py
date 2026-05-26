@@ -64,6 +64,7 @@ class FaceEmbedder:
         self.model_path = str(model_path or _DEFAULT_MODEL_PATH)
         self._lock = threading.Lock()
         self._latest_embeddings: list = []  # list[np.ndarray]
+        self._latest_face_landmarks: list = []  # list[list[NormalizedLandmark]]
         self._latest_ts_ns = 0
         self._landmarker = None
 
@@ -88,23 +89,31 @@ class FaceEmbedder:
         self._landmarker.detect_async(mp_image, ts_ms)
 
     def latest(self):
-        """Return (embeddings_list, ts_ns) of the most recent result.
+        """Return (embeddings_list, face_landmarks_list, ts_ns).
 
-        embeddings_list is a list of embeddings (numpy arrays). Empty if no
+        embeddings_list and face_landmarks_list are aligned: index i in
+        each refers to the same detected face. Both are empty when no
         face was detected in the most recent frame.
         """
         with self._lock:
-            return list(self._latest_embeddings), self._latest_ts_ns
+            return (
+                list(self._latest_embeddings),
+                list(self._latest_face_landmarks),
+                self._latest_ts_ns,
+            )
 
     def _on_result(self, result, output_image, timestamp_ms):
         embeddings: list = []
+        face_landmarks_list: list = []
         if result.face_landmarks:
             for face in result.face_landmarks:
                 emb = landmarks_to_embedding(face)
                 if emb is not None:
                     embeddings.append(emb)
+                    face_landmarks_list.append(face)
         with self._lock:
             self._latest_embeddings = embeddings
+            self._latest_face_landmarks = face_landmarks_list
             self._latest_ts_ns = time.monotonic_ns()
 
     def __enter__(self):

@@ -74,9 +74,13 @@ def draw_scrub_indicator(frame, anchor_y_norm, tip_y_norm, tip_x_norm):
     cv2.circle(frame, (tx, ty), 2, CYAN, -1, cv2.LINE_AA)
 
 
-def draw_lock_state(frame, recognized, has_profile):
+def draw_lock_state(frame, recognized, has_profile, similarity=None, threshold=None):
     """Small top-right indicator: 'UNLOCKED' (green), 'LOCKED' (red),
     or 'NO PROFILE' (gray) when calibration is missing.
+
+    If `similarity` is provided, append a second right-aligned line showing
+    the current max cosine similarity vs the calibration threshold, e.g.
+    `0.94 / 0.92` — colored green when at/above threshold, red below.
     """
     if not has_profile:
         text = "NO PROFILE"
@@ -90,3 +94,23 @@ def draw_lock_state(frame, recognized, has_profile):
     h, w = frame.shape[:2]
     (tw, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
     _put(frame, text, (w - tw - 12, 84), color, 0.6, 2)
+    if similarity is not None and threshold is not None:
+        sim_text = f"{similarity:.2f} / {threshold:.2f}"
+        sim_color = GREEN if similarity >= threshold else RED
+        (stw, _), _ = cv2.getTextSize(sim_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+        _put(frame, sim_text, (w - stw - 12, 108), sim_color, 0.5, 1)
+
+
+def draw_face_landmarks(frame, face_landmarks_list, color=GRAY):
+    """Draw small dots for each face landmark, mirroring draw_landmarks
+    for hands. `face_landmarks_list` is a list (one entry per detected face)
+    of NormalizedLandmark lists from MediaPipe Face Landmarker (478 points).
+    """
+    if not face_landmarks_list:
+        return
+    h, w = frame.shape[:2]
+    for face in face_landmarks_list:
+        for lm in face:
+            x = int(lm.x * w)
+            y = int(lm.y * h)
+            cv2.circle(frame, (x, y), 1, color, -1, cv2.LINE_AA)

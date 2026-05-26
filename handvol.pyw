@@ -98,7 +98,9 @@ def capture_loop(args, show_evt, worker_stop, icon, profile_state):
     from handvol.overlay import (
         draw_state, draw_gesture, draw_volume, draw_fps,
         draw_landmarks, draw_scrub_indicator, draw_lock_state,
+        draw_face_landmarks,
     )
+    from handvol.face_profile import MATCH_THRESHOLD
 
     scrubber = VolumeScrubber(sensitivity=args.sensitivity, smoothing=args.smoothing)
     machine = GestureStateMachine()
@@ -119,11 +121,14 @@ def capture_loop(args, show_evt, worker_stop, icon, profile_state):
                 break
 
             if latest is None:
-                gesture, score, landmarks, face_embs = ("None", 0.0, None, [])
+                gesture, score, landmarks, face_embs, face_lms = (
+                    "None", 0.0, None, [], []
+                )
             else:
-                gesture, score, landmarks, face_embs = latest
+                gesture, score, landmarks, face_embs, face_lms = latest
 
             profile = profile_state["profile"]
+            max_similarity = None  # for the overlay readout
             if profile is None or profile.capture_count == 0:
                 recognized = False
             elif not face_embs:
@@ -132,7 +137,11 @@ def capture_loop(args, show_evt, worker_stop, icon, profile_state):
             else:
                 no_face_streak = 0
                 # Spec: if ANY face in frame matches the profile, unlock.
-                recognized = any(profile.matches(e)[0] for e in face_embs)
+                # Compute max similarity across all detected faces so we
+                # can show the user the score for tuning purposes.
+                sims = [profile.matches(e)[1] for e in face_embs]
+                max_similarity = max(sims)
+                recognized = max_similarity >= MATCH_THRESHOLD
             last_recognized = recognized
 
             # Drop gesture if the user is not recognized; the state machine
@@ -206,6 +215,8 @@ def capture_loop(args, show_evt, worker_stop, icon, profile_state):
             if want_window:
                 if landmarks is not None:
                     draw_landmarks(frame, landmarks)
+                if face_lms:
+                    draw_face_landmarks(frame, face_lms)
                 draw_state(frame, machine.state.value)
                 draw_gesture(frame, gesture, score)
                 draw_volume(frame, vol_now)
@@ -213,6 +224,8 @@ def capture_loop(args, show_evt, worker_stop, icon, profile_state):
                     frame, recognized,
                     has_profile=(profile_state["profile"] is not None
                                  and profile_state["profile"].capture_count > 0),
+                    similarity=max_similarity,
+                    threshold=MATCH_THRESHOLD,
                 )
                 if machine.state is State.SCRUB and scrubber.active and landmarks is not None:
                     tip_x, tip_y = scrub_tip(landmarks)

@@ -146,8 +146,9 @@ class GestureSource:
     def read(self):
         """Grab a frame, mirror it, submit to recognizer + face embedder.
         Returns (frame, latest_result) where latest_result is
-        (gesture_name, score, landmarks, face_embeddings) or None.
-        face_embeddings is a list (possibly empty) of face identity vectors.
+        (gesture_name, score, landmarks, face_embeddings, face_landmarks_list)
+        or None. face_embeddings and face_landmarks_list are aligned lists
+        (possibly empty); index i in each refers to the same detected face.
         """
         ok, frame = self._cap.read()
         if not ok:
@@ -162,11 +163,11 @@ class GestureSource:
 
         with self._lock:
             latest = self._latest
-        face_embs, _ = self._embedder.latest()
+        face_embs, face_lms, _ = self._embedder.latest()
         if latest is None:
             return frame, None
         gesture_name, score, landmarks = latest
-        return frame, (gesture_name, score, landmarks, face_embs)
+        return frame, (gesture_name, score, landmarks, face_embs, face_lms)
 
     def close(self):
         self._embedder.close()
