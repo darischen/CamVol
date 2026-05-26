@@ -72,3 +72,21 @@ def draw_scrub_indicator(frame, anchor_y_norm, tip_y_norm, tip_x_norm):
     cv2.line(frame, (tx, ay), (tx, ty), CYAN, 2, cv2.LINE_AA)
     cv2.circle(frame, (tx, ty), 7, CYAN, 2, cv2.LINE_AA)
     cv2.circle(frame, (tx, ty), 2, CYAN, -1, cv2.LINE_AA)
+
+
+def draw_lock_state(frame, recognized, has_profile):
+    """Small top-right indicator: 'UNLOCKED' (green), 'LOCKED' (red),
+    or 'NO PROFILE' (gray) when calibration is missing.
+    """
+    if not has_profile:
+        text = "NO PROFILE"
+        color = GRAY
+    elif recognized:
+        text = "UNLOCKED"
+        color = GREEN
+    else:
+        text = "LOCKED"
+        color = RED
+    h, w = frame.shape[:2]
+    (tw, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+    _put(frame, text, (w - tw - 12, 56), color, 0.6, 2)
