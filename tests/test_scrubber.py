@@ -1,5 +1,5 @@
 from handvol.scrubber import VolumeScrubber
-from handvol.state import GestureStateMachine, State, Event, POINTING, FIST, PALM
+from handvol.state import GestureStateMachine, State, Event, OK_SIGN, FIST, PALM
 
 
 def test_enter_anchors_and_first_update_is_noop():
@@ -29,18 +29,18 @@ def test_clamp_to_0_100():
     assert s.update(1.0) == 0  # would be -30
 
 
-def test_state_machine_enter_scrub_after_5_pointing():
+def test_state_machine_enter_scrub_after_5_ok_sign():
     sm = GestureStateMachine()
-    events = [sm.step(POINTING) for _ in range(5)]
+    events = [sm.step(OK_SIGN) for _ in range(5)]
     assert sm.state is State.SCRUB
     assert events[-1] is Event.ENTER_SCRUB
     assert all(e is Event.NONE for e in events[:-1])
 
 
-def test_state_machine_exits_scrub_after_3_non_pointing():
+def test_state_machine_exits_scrub_after_3_non_ok_sign():
     sm = GestureStateMachine()
     for _ in range(5):
-        sm.step(POINTING)
+        sm.step(OK_SIGN)
     assert sm.state is State.SCRUB
     sm.step("None")
     sm.step("None")

@@ -25,7 +25,6 @@ SCRUB_EXIT_FRAMES = 3
 TOGGLE_FRAMES = 5
 COOLDOWN_FRAMES = 10
 
-POINTING = "Pointing_Up"
 FIST = "Closed_Fist"
 PALM = "Open_Palm"
 VICTORY = "Victory"
@@ -36,7 +35,6 @@ LEFT_HAND_THUMB_RIGHT = "left_hand_thumb_right"
 RIGHT_HAND_THUMB_LEFT = "right_hand_thumb_left"
 RIGHT_HAND_THUMB_RIGHT = "right_hand_thumb_right"
 
-SCRUB_GESTURES = (POINTING, OK_SIGN)
 SKIP_GESTURES = (LEFT_HAND_THUMB_RIGHT, RIGHT_HAND_THUMB_RIGHT)
 PREV_GESTURES = (LEFT_HAND_THUMB_LEFT, RIGHT_HAND_THUMB_LEFT)
 
@@ -50,8 +48,8 @@ class GestureStateMachine:
 
     def __init__(self):
         self.state = State.IDLE
-        self._point_count = 0
-        self._non_point_count = 0
+        self._ok_count = 0
+        self._non_ok_count = 0
         self._fist_count = 0
         self._palm_count = 0
         self._victory_count = 0
@@ -62,8 +60,8 @@ class GestureStateMachine:
         self._cooldown_left = 0
 
     def _reset_counters(self):
-        self._point_count = 0
-        self._non_point_count = 0
+        self._ok_count = 0
+        self._non_ok_count = 0
         self._fist_count = 0
         self._palm_count = 0
         self._victory_count = 0
@@ -73,31 +71,30 @@ class GestureStateMachine:
         self._neutral_count = 0
 
     def _bump(self, gesture):
-        is_scrub = gesture in SCRUB_GESTURES
         is_skip = gesture in SKIP_GESTURES
         is_prev = gesture in PREV_GESTURES
-        self._point_count = self._point_count + 1 if is_scrub else 0
+        self._ok_count = self._ok_count + 1 if gesture == OK_SIGN else 0
         self._fist_count = self._fist_count + 1 if gesture == FIST else 0
         self._palm_count = self._palm_count + 1 if gesture == PALM else 0
         self._victory_count = self._victory_count + 1 if gesture == VICTORY else 0
         self._iloveyou_count = self._iloveyou_count + 1 if gesture == ILOVEYOU else 0
         self._skip_count = self._skip_count + 1 if is_skip else 0
         self._prev_count = self._prev_count + 1 if is_prev else 0
-        if is_scrub or is_skip or is_prev or gesture in (FIST, PALM, VICTORY, ILOVEYOU):
+        if is_skip or is_prev or gesture in (OK_SIGN, FIST, PALM, VICTORY, ILOVEYOU):
             self._neutral_count = 0
         else:
             self._neutral_count += 1
-        if is_scrub:
-            self._non_point_count = 0
+        if gesture == OK_SIGN:
+            self._non_ok_count = 0
         else:
-            self._non_point_count += 1
+            self._non_ok_count += 1
 
     def step(self, gesture):
         gesture = gesture or "None"
         self._bump(gesture)
 
         if self.state is State.IDLE:
-            if self._point_count >= SCRUB_ENTER_FRAMES:
+            if self._ok_count >= SCRUB_ENTER_FRAMES:
                 self.state = State.SCRUB
                 self._reset_counters()
                 return Event.ENTER_SCRUB
@@ -134,11 +131,11 @@ class GestureStateMachine:
             return Event.NONE
 
         if self.state is State.SCRUB:
-            if self._non_point_count >= SCRUB_EXIT_FRAMES:
+            if self._non_ok_count >= SCRUB_EXIT_FRAMES:
                 self.state = State.IDLE
                 self._reset_counters()
                 return Event.EXIT_SCRUB
-            if gesture in SCRUB_GESTURES:
+            if gesture == OK_SIGN:
                 return Event.UPDATE_SCRUB
             return Event.NONE
 

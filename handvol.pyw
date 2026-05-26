@@ -17,18 +17,11 @@ THUMB_TIP = 4  # MediaPipe landmark index for the thumb tip
 WINDOW_TITLE = "HandVol"
 
 
-def scrub_tip(gesture, landmarks):
-    """Return (x, y) in normalized coords for the active scrub gesture.
-
-    For POINTING, the index fingertip. For OK_sign, the midpoint of the
-    thumb+index pinch — visually inside the OK loop.
-    """
-    if gesture == "OK_sign":
-        thumb = landmarks[THUMB_TIP]
-        index = landmarks[INDEX_TIP]
-        return ((thumb.x + index.x) / 2.0, (thumb.y + index.y) / 2.0)
-    tip = landmarks[INDEX_TIP]
-    return (tip.x, tip.y)
+def scrub_tip(landmarks):
+    """Return (x, y) normalized coords at the midpoint of the OK pinch."""
+    thumb = landmarks[THUMB_TIP]
+    index = landmarks[INDEX_TIP]
+    return ((thumb.x + index.x) / 2.0, (thumb.y + index.y) / 2.0)
 
 
 def parse_args():
@@ -120,12 +113,12 @@ def capture_loop(args, show_evt, worker_stop, icon):
             event = machine.step(gesture)
 
             if event is Event.ENTER_SCRUB and landmarks is not None:
-                _, tip_y = scrub_tip(gesture, landmarks)
+                _, tip_y = scrub_tip(landmarks)
                 current_vol = 50.0 if args.no_audio else audio.get_volume()
                 scrubber.enter(tip_y, current_vol)
 
             elif event is Event.UPDATE_SCRUB and landmarks is not None and scrubber.active:
-                _, tip_y = scrub_tip(gesture, landmarks)
+                _, tip_y = scrub_tip(landmarks)
                 new_vol = scrubber.update(tip_y)
                 if not args.no_audio:
                     audio.set_volume(new_vol)
@@ -188,7 +181,7 @@ def capture_loop(args, show_evt, worker_stop, icon):
                 draw_gesture(frame, gesture, score)
                 draw_volume(frame, vol_now)
                 if machine.state is State.SCRUB and scrubber.active and landmarks is not None:
-                    tip_x, tip_y = scrub_tip(gesture, landmarks)
+                    tip_x, tip_y = scrub_tip(landmarks)
                     draw_scrub_indicator(frame, scrubber.anchor_y, tip_y, tip_x)
                 draw_fps(frame, fps)
                 cv2.imshow(WINDOW_TITLE, frame)
