@@ -13,6 +13,48 @@ MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "gesture_recogn
 
 OK_SIGN_PINCH_THRESHOLD = 0.06
 
+SIDE_THUMB_HORIZ_RATIO = 1.2   # |dx| must exceed |dy| by this factor
+SIDE_THUMB_EXTEND_RATIO = 1.3  # tip-to-wrist must exceed cmc-to-wrist by this factor
+SIDE_THUMB_CURL_RATIO = 1.2    # fingertip-to-wrist must stay within this * mcp-to-wrist
+
+
+def _detect_side_thumb(landmarks, handedness):
+    """Return a label like 'left_hand_thumb_right' or None.
+
+    Fires when the thumb sticks out roughly horizontally with the other
+    four fingers curled into a fist. Direction is reported in the user's
+    real-world frame: thumb tip pointing toward the user's right is
+    '..._thumb_right' for either hand.
+    """
+    if not landmarks or len(landmarks) < 21 or handedness not in ("Left", "Right"):
+        return None
+
+    wrist = landmarks[0]
+    thumb_cmc = landmarks[1]
+    thumb_tip = landmarks[4]
+
+    dx = thumb_tip.x - thumb_cmc.x
+    dy = thumb_tip.y - thumb_cmc.y
+    if abs(dx) < abs(dy) * SIDE_THUMB_HORIZ_RATIO:
+        return None
+
+    tip_dist = math.hypot(thumb_tip.x - wrist.x, thumb_tip.y - wrist.y)
+    cmc_dist = math.hypot(thumb_cmc.x - wrist.x, thumb_cmc.y - wrist.y)
+    if tip_dist < cmc_dist * SIDE_THUMB_EXTEND_RATIO:
+        return None
+
+    for mcp_idx, tip_idx in ((5, 8), (9, 12), (13, 16), (17, 20)):
+        mcp = landmarks[mcp_idx]
+        tip = landmarks[tip_idx]
+        mcp_to_wrist = math.hypot(mcp.x - wrist.x, mcp.y - wrist.y)
+        tip_to_wrist = math.hypot(tip.x - wrist.x, tip.y - wrist.y)
+        if tip_to_wrist > mcp_to_wrist * SIDE_THUMB_CURL_RATIO:
+            return None
+
+    hand_prefix = "right_hand" if handedness == "Left" else "left_hand"
+    direction = "right" if dx > 0 else "left"
+    return f"{hand_prefix}_thumb_{direction}"
+
 
 def _detect_ok_sign(landmarks):
     """Return True if the 21 hand landmarks form an OK sign.
@@ -55,15 +97,23 @@ class GestureSource:
         gesture_name = "None"
         score = 0.0
         landmarks = None
+        handedness = None
         if result.gestures and result.gestures[0]:
             top = result.gestures[0][0]
             gesture_name = top.category_name or "None"
             score = top.score
+        if result.handedness and result.handedness[0]:
+            handedness = result.handedness[0][0].category_name
         if result.hand_landmarks:
             landmarks = result.hand_landmarks[0]
             if _detect_ok_sign(landmarks):
                 gesture_name = "OK_sign"
                 score = 1.0
+            else:
+                side = _detect_side_thumb(landmarks, handedness)
+                if side is not None:
+                    gesture_name = side
+                    score = 1.0
         with self._lock:
             self._latest = (gesture_name, score, landmarks)
 
