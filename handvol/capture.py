@@ -1,3 +1,4 @@
+import math
 import threading
 import time
 from pathlib import Path
@@ -9,6 +10,26 @@ from mediapipe.tasks.python import vision as mp_vision
 
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "gesture_recognizer.task"
+
+OK_SIGN_PINCH_THRESHOLD = 0.06
+
+
+def _detect_ok_sign(landmarks):
+    """Return True if the 21 hand landmarks form an OK sign.
+
+    Thumb tip touches index tip; middle, ring, pinky extended upward.
+    """
+    if not landmarks or len(landmarks) < 21:
+        return False
+    thumb_tip = landmarks[4]
+    index_tip = landmarks[8]
+    pinch = math.hypot(thumb_tip.x - index_tip.x, thumb_tip.y - index_tip.y)
+    if pinch >= OK_SIGN_PINCH_THRESHOLD:
+        return False
+    middle_extended = landmarks[12].y < landmarks[10].y
+    ring_extended = landmarks[16].y < landmarks[14].y
+    pinky_extended = landmarks[20].y < landmarks[18].y
+    return middle_extended and ring_extended and pinky_extended
 
 
 class GestureSource:
@@ -40,6 +61,9 @@ class GestureSource:
             score = top.score
         if result.hand_landmarks:
             landmarks = result.hand_landmarks[0]
+            if _detect_ok_sign(landmarks):
+                gesture_name = "OK_sign"
+                score = 1.0
         with self._lock:
             self._latest = (gesture_name, score, landmarks)
 

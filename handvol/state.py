@@ -32,6 +32,9 @@ VICTORY = "Victory"
 ILOVEYOU = "ILoveYou"
 THUMB_UP = "Thumb_Up"
 THUMB_DOWN = "Thumb_Down"
+OK_SIGN = "OK_sign"
+
+SCRUB_GESTURES = (POINTING, OK_SIGN)
 
 
 class GestureStateMachine:
@@ -66,18 +69,19 @@ class GestureStateMachine:
         self._neutral_count = 0
 
     def _bump(self, gesture):
-        self._point_count = self._point_count + 1 if gesture == POINTING else 0
+        is_scrub = gesture in SCRUB_GESTURES
+        self._point_count = self._point_count + 1 if is_scrub else 0
         self._fist_count = self._fist_count + 1 if gesture == FIST else 0
         self._palm_count = self._palm_count + 1 if gesture == PALM else 0
         self._victory_count = self._victory_count + 1 if gesture == VICTORY else 0
         self._iloveyou_count = self._iloveyou_count + 1 if gesture == ILOVEYOU else 0
         self._thumb_up_count = self._thumb_up_count + 1 if gesture == THUMB_UP else 0
         self._thumb_down_count = self._thumb_down_count + 1 if gesture == THUMB_DOWN else 0
-        if gesture in (POINTING, FIST, PALM, VICTORY, ILOVEYOU, THUMB_UP, THUMB_DOWN):
+        if is_scrub or gesture in (FIST, PALM, VICTORY, ILOVEYOU, THUMB_UP, THUMB_DOWN):
             self._neutral_count = 0
         else:
             self._neutral_count += 1
-        if gesture == POINTING:
+        if is_scrub:
             self._non_point_count = 0
         else:
             self._non_point_count += 1
@@ -128,7 +132,7 @@ class GestureStateMachine:
                 self.state = State.IDLE
                 self._reset_counters()
                 return Event.EXIT_SCRUB
-            if gesture == POINTING:
+            if gesture in SCRUB_GESTURES:
                 return Event.UPDATE_SCRUB
             return Event.NONE
 

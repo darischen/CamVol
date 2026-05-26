@@ -13,7 +13,22 @@ from handvol.state import GestureStateMachine, State, Event
 
 
 INDEX_TIP = 8  # MediaPipe landmark index for the index fingertip
+THUMB_TIP = 4  # MediaPipe landmark index for the thumb tip
 WINDOW_TITLE = "HandVol"
+
+
+def scrub_tip(gesture, landmarks):
+    """Return (x, y) in normalized coords for the active scrub gesture.
+
+    For POINTING, the index fingertip. For OK_sign, the midpoint of the
+    thumb+index pinch — visually inside the OK loop.
+    """
+    if gesture == "OK_sign":
+        thumb = landmarks[THUMB_TIP]
+        index = landmarks[INDEX_TIP]
+        return ((thumb.x + index.x) / 2.0, (thumb.y + index.y) / 2.0)
+    tip = landmarks[INDEX_TIP]
+    return (tip.x, tip.y)
 
 
 def parse_args():
@@ -105,12 +120,12 @@ def capture_loop(args, show_evt, worker_stop, icon):
             event = machine.step(gesture)
 
             if event is Event.ENTER_SCRUB and landmarks is not None:
-                tip_y = landmarks[INDEX_TIP].y
+                _, tip_y = scrub_tip(gesture, landmarks)
                 current_vol = 50.0 if args.no_audio else audio.get_volume()
                 scrubber.enter(tip_y, current_vol)
 
             elif event is Event.UPDATE_SCRUB and landmarks is not None and scrubber.active:
-                tip_y = landmarks[INDEX_TIP].y
+                _, tip_y = scrub_tip(gesture, landmarks)
                 new_vol = scrubber.update(tip_y)
                 if not args.no_audio:
                     audio.set_volume(new_vol)
@@ -173,8 +188,8 @@ def capture_loop(args, show_evt, worker_stop, icon):
                 draw_gesture(frame, gesture, score)
                 draw_volume(frame, vol_now)
                 if machine.state is State.SCRUB and scrubber.active and landmarks is not None:
-                    tip = landmarks[INDEX_TIP]
-                    draw_scrub_indicator(frame, scrubber.anchor_y, tip.y, tip.x)
+                    tip_x, tip_y = scrub_tip(gesture, landmarks)
+                    draw_scrub_indicator(frame, scrubber.anchor_y, tip_y, tip_x)
                 draw_fps(frame, fps)
                 cv2.imshow(WINDOW_TITLE, frame)
                 window_open = True
