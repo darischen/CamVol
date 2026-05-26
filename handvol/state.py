@@ -33,8 +33,14 @@ ILOVEYOU = "ILoveYou"
 THUMB_UP = "Thumb_Up"
 THUMB_DOWN = "Thumb_Down"
 OK_SIGN = "OK_sign"
+LEFT_HAND_THUMB_LEFT = "left_hand_thumb_left"
+LEFT_HAND_THUMB_RIGHT = "left_hand_thumb_right"
+RIGHT_HAND_THUMB_LEFT = "right_hand_thumb_left"
+RIGHT_HAND_THUMB_RIGHT = "right_hand_thumb_right"
 
 SCRUB_GESTURES = (POINTING, OK_SIGN)
+SKIP_GESTURES = (THUMB_UP, LEFT_HAND_THUMB_RIGHT, RIGHT_HAND_THUMB_RIGHT)
+PREV_GESTURES = (THUMB_DOWN, LEFT_HAND_THUMB_LEFT, RIGHT_HAND_THUMB_LEFT)
 
 
 class GestureStateMachine:
@@ -70,14 +76,16 @@ class GestureStateMachine:
 
     def _bump(self, gesture):
         is_scrub = gesture in SCRUB_GESTURES
+        is_skip = gesture in SKIP_GESTURES
+        is_prev = gesture in PREV_GESTURES
         self._point_count = self._point_count + 1 if is_scrub else 0
         self._fist_count = self._fist_count + 1 if gesture == FIST else 0
         self._palm_count = self._palm_count + 1 if gesture == PALM else 0
         self._victory_count = self._victory_count + 1 if gesture == VICTORY else 0
         self._iloveyou_count = self._iloveyou_count + 1 if gesture == ILOVEYOU else 0
-        self._thumb_up_count = self._thumb_up_count + 1 if gesture == THUMB_UP else 0
-        self._thumb_down_count = self._thumb_down_count + 1 if gesture == THUMB_DOWN else 0
-        if is_scrub or gesture in (FIST, PALM, VICTORY, ILOVEYOU, THUMB_UP, THUMB_DOWN):
+        self._thumb_up_count = self._thumb_up_count + 1 if is_skip else 0
+        self._thumb_down_count = self._thumb_down_count + 1 if is_prev else 0
+        if is_scrub or is_skip or is_prev or gesture in (FIST, PALM, VICTORY, ILOVEYOU):
             self._neutral_count = 0
         else:
             self._neutral_count += 1
