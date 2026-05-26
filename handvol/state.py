@@ -30,8 +30,6 @@ FIST = "Closed_Fist"
 PALM = "Open_Palm"
 VICTORY = "Victory"
 ILOVEYOU = "ILoveYou"
-THUMB_UP = "Thumb_Up"
-THUMB_DOWN = "Thumb_Down"
 OK_SIGN = "OK_sign"
 LEFT_HAND_THUMB_LEFT = "left_hand_thumb_left"
 LEFT_HAND_THUMB_RIGHT = "left_hand_thumb_right"
@@ -39,8 +37,8 @@ RIGHT_HAND_THUMB_LEFT = "right_hand_thumb_left"
 RIGHT_HAND_THUMB_RIGHT = "right_hand_thumb_right"
 
 SCRUB_GESTURES = (POINTING, OK_SIGN)
-SKIP_GESTURES = (THUMB_UP, LEFT_HAND_THUMB_RIGHT, RIGHT_HAND_THUMB_RIGHT)
-PREV_GESTURES = (THUMB_DOWN, LEFT_HAND_THUMB_LEFT, RIGHT_HAND_THUMB_LEFT)
+SKIP_GESTURES = (LEFT_HAND_THUMB_RIGHT, RIGHT_HAND_THUMB_RIGHT)
+PREV_GESTURES = (LEFT_HAND_THUMB_LEFT, RIGHT_HAND_THUMB_LEFT)
 
 
 class GestureStateMachine:
@@ -58,8 +56,8 @@ class GestureStateMachine:
         self._palm_count = 0
         self._victory_count = 0
         self._iloveyou_count = 0
-        self._thumb_up_count = 0
-        self._thumb_down_count = 0
+        self._skip_count = 0
+        self._prev_count = 0
         self._neutral_count = 0
         self._cooldown_left = 0
 
@@ -70,8 +68,8 @@ class GestureStateMachine:
         self._palm_count = 0
         self._victory_count = 0
         self._iloveyou_count = 0
-        self._thumb_up_count = 0
-        self._thumb_down_count = 0
+        self._skip_count = 0
+        self._prev_count = 0
         self._neutral_count = 0
 
     def _bump(self, gesture):
@@ -83,8 +81,8 @@ class GestureStateMachine:
         self._palm_count = self._palm_count + 1 if gesture == PALM else 0
         self._victory_count = self._victory_count + 1 if gesture == VICTORY else 0
         self._iloveyou_count = self._iloveyou_count + 1 if gesture == ILOVEYOU else 0
-        self._thumb_up_count = self._thumb_up_count + 1 if is_skip else 0
-        self._thumb_down_count = self._thumb_down_count + 1 if is_prev else 0
+        self._skip_count = self._skip_count + 1 if is_skip else 0
+        self._prev_count = self._prev_count + 1 if is_prev else 0
         if is_scrub or is_skip or is_prev or gesture in (FIST, PALM, VICTORY, ILOVEYOU):
             self._neutral_count = 0
         else:
@@ -123,12 +121,12 @@ class GestureStateMachine:
                 self._cooldown_left = COOLDOWN_FRAMES
                 self._reset_counters()
                 return Event.EXIT_SPOTIFY
-            if self._thumb_up_count >= TOGGLE_FRAMES:
+            if self._skip_count >= TOGGLE_FRAMES:
                 self.state = State.IDLE_COOLDOWN
                 self._cooldown_left = COOLDOWN_FRAMES
                 self._reset_counters()
                 return Event.NEXT_TRACK
-            if self._thumb_down_count >= TOGGLE_FRAMES:
+            if self._prev_count >= TOGGLE_FRAMES:
                 self.state = State.IDLE_COOLDOWN
                 self._cooldown_left = COOLDOWN_FRAMES
                 self._reset_counters()
