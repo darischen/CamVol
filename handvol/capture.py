@@ -8,7 +8,8 @@ import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision as mp_vision
 
-from handvol.face_detect import FaceEmbedder
+from handvol.face_detect import FaceEmbedder, landmarks_to_bbox
+from handvol.face_identity import IdentityEncoder
 
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "gesture_recognizer.task"
@@ -95,6 +96,7 @@ class GestureSource:
         self._latest = None  # (gesture_name, score, landmarks)
         self._start_ns = None
         self._embedder = FaceEmbedder()
+        self._identity = IdentityEncoder()
 
     def _on_result(self, result, output_image, timestamp_ms):
         gesture_name = "None"
@@ -137,6 +139,7 @@ class GestureSource:
             )
             self._recognizer = mp_vision.GestureRecognizer.create_from_options(opts)
             self._embedder.open()
+            self._identity.start()
         except Exception:
             self._cap.release()
             self._cap = None
@@ -144,11 +147,12 @@ class GestureSource:
         self._start_ns = time.monotonic_ns()
 
     def read(self):
-        """Grab a frame, mirror it, submit to recognizer + face embedder.
-        Returns (frame, latest_result) where latest_result is
-        (gesture_name, score, landmarks, face_embeddings, face_landmarks_list)
-        or None. face_embeddings and face_landmarks_list are aligned lists
-        (possibly empty); index i in each refers to the same detected face.
+        """Grab a frame, mirror it, submit to recognizer + face detector
+        + identity encoder. Returns (frame, latest_result) where
+        latest_result is
+        (gesture_name, score, landmarks, face_landmarks_list, identity_emb)
+        or None. `identity_emb` is a single 128-D vector (or None), from
+        the largest detected face only (see design doc).
         """
         ok, frame = self._cap.read()
         if not ok:
@@ -161,15 +165,35 @@ class GestureSource:
         self._recognizer.recognize_async(mp_image, ts_ms)
         self._embedder.submit(mp_image, ts_ms)
 
+        # Pick the largest detected face by bbox area and submit (rgb,
+        # bbox) to the dlib worker. The worker rate-limits itself.
+        face_lms, _ = self._embedder.latest()
+        if face_lms:
+            largest_bbox = None
+            largest_area = -1
+            for lms in face_lms:
+                bbox = landmarks_to_bbox(lms, frame.shape)
+                if bbox is None:
+                    continue
+                top, right, bottom, left = bbox
+                area = max(0, right - left) * max(0, bottom - top)
+                if area > largest_area:
+                    largest_area = area
+                    largest_bbox = bbox
+            if largest_bbox is not None:
+                self._identity.submit(rgb, largest_bbox)
+
+        identity_emb, _ = self._identity.latest()
+
         with self._lock:
             latest = self._latest
-        face_embs, face_lms, _ = self._embedder.latest()
         if latest is None:
             return frame, None
         gesture_name, score, landmarks = latest
-        return frame, (gesture_name, score, landmarks, face_embs, face_lms)
+        return frame, (gesture_name, score, landmarks, face_lms, identity_emb)
 
     def close(self):
+        self._identity.stop()
         self._embedder.close()
         if self._recognizer is not None:
             self._recognizer.close()
