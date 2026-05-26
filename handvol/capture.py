@@ -8,6 +8,8 @@ import mediapipe as mp
 from mediapipe.tasks import python as mp_python
 from mediapipe.tasks.python import vision as mp_vision
 
+from handvol.face_detect import FaceEmbedder
+
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "gesture_recognizer.task"
 
@@ -92,6 +94,7 @@ class GestureSource:
         self._lock = threading.Lock()
         self._latest = None  # (gesture_name, score, landmarks)
         self._start_ns = None
+        self._embedder = FaceEmbedder()
 
     def _on_result(self, result, output_image, timestamp_ms):
         gesture_name = "None"
@@ -132,10 +135,15 @@ class GestureSource:
             result_callback=self._on_result,
         )
         self._recognizer = mp_vision.GestureRecognizer.create_from_options(opts)
+        self._embedder.open()
         self._start_ns = time.monotonic_ns()
 
     def read(self):
-        """Grab a frame, mirror it, submit to recognizer. Returns (frame, latest_result)."""
+        """Grab a frame, mirror it, submit to recognizer + face embedder.
+        Returns (frame, latest_result) where latest_result is
+        (gesture_name, score, landmarks, face_embeddings) or None.
+        face_embeddings is a list (possibly empty) of face identity vectors.
+        """
         ok, frame = self._cap.read()
         if not ok:
             return None, None
@@ -145,12 +153,18 @@ class GestureSource:
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         ts_ms = (time.monotonic_ns() - self._start_ns) // 1_000_000
         self._recognizer.recognize_async(mp_image, ts_ms)
+        self._embedder.submit(mp_image, ts_ms)
 
         with self._lock:
             latest = self._latest
-        return frame, latest
+        face_embs, _ = self._embedder.latest()
+        if latest is None:
+            return frame, None
+        gesture_name, score, landmarks = latest
+        return frame, (gesture_name, score, landmarks, face_embs)
 
     def close(self):
+        self._embedder.close()
         if self._recognizer is not None:
             self._recognizer.close()
         if self._cap is not None:
