@@ -14,6 +14,7 @@ kernel32 = ctypes.windll.kernel32
 
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 SW_RESTORE = 9
+WM_CLOSE = 0x0010
 
 # Pin the signatures we use — without these ctypes treats HWND as int and the
 # 64-bit pointer half can silently get truncated.
@@ -27,6 +28,8 @@ user32.SetForegroundWindow.argtypes = [wintypes.HWND]
 user32.BringWindowToTop.argtypes = [wintypes.HWND]
 user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
 user32.AttachThreadInput.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.BOOL]
+user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+user32.PostMessageW.restype = wintypes.BOOL
 kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 kernel32.OpenProcess.restype = wintypes.HANDLE
 kernel32.QueryFullProcessImageNameW.argtypes = [
@@ -116,3 +119,15 @@ def focus_or_launch():
         return "launched"
     except OSError:
         return "failed"
+
+
+def exit_spotify():
+    """Ask Spotify to close gracefully. Posts WM_CLOSE to its main window —
+    equivalent to clicking the title bar X. Returns 'closed', 'not_running',
+    or 'failed'."""
+    hwnd = _find_spotify_hwnd()
+    if not hwnd:
+        return "not_running"
+    if user32.PostMessageW(hwnd, WM_CLOSE, 0, 0):
+        return "closed"
+    return "failed"
