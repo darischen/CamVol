@@ -12,6 +12,7 @@ normalized landmark vectors of the same identity tends to sit well above
 from __future__ import annotations
 
 import logging
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -93,7 +94,7 @@ class FaceProfile:
                 embeddings = data["embeddings"]
                 created_at = str(data["created_at"]) if "created_at" in data else ""
                 version = int(data["version"]) if "version" in data else PROFILE_VERSION
-        except (OSError, ValueError, KeyError, EOFError) as exc:
+        except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile) as exc:
             _log.warning("Failed to load face profile at %s: %s", path, exc)
             return None
         if embeddings.ndim != 2:

@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 from handvol.face_profile import FaceProfile, DEFAULT_PROFILE_PATH
+from handvol.face_detect import FACE_MODEL_FILENAME
 
 
 INDEX_TIP = 8  # MediaPipe landmark index for the index fingertip
@@ -263,6 +264,14 @@ def main():
             "gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
         )
 
+    face_model_path = MODEL_PATH.parent / FACE_MODEL_FILENAME
+    if not face_model_path.exists():
+        raise SystemExit(
+            f"Missing face landmarker model at {face_model_path}\n"
+            "Download from: https://storage.googleapis.com/mediapipe-models/"
+            "face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+        )
+
     show_evt = threading.Event()
     if args.show:
         show_evt.set()
@@ -315,6 +324,7 @@ def main():
         # in a subprocess (blocks the tray callback thread, which is fine
         # for pystray), then reload the profile and restart the worker.
         stop_worker()
+        time.sleep(0.3)  # let DirectShow release the camera handle
         try:
             python = sys.executable
             # If we were launched by pythonw, switch to python for the

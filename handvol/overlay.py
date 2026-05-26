@@ -89,4 +89,4 @@ def draw_lock_state(frame, recognized, has_profile):
         color = RED
     h, w = frame.shape[:2]
     (tw, _), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-    _put(frame, text, (w - tw - 12, 56), color, 0.6, 2)
+    _put(frame, text, (w - tw - 12, 84), color, 0.6, 2)

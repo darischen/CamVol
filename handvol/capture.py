@@ -127,15 +127,20 @@ class GestureSource:
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
 
-        base_opts = mp_python.BaseOptions(model_asset_path=self.model_path)
-        opts = mp_vision.GestureRecognizerOptions(
-            base_options=base_opts,
-            running_mode=mp_vision.RunningMode.LIVE_STREAM,
-            num_hands=1,
-            result_callback=self._on_result,
-        )
-        self._recognizer = mp_vision.GestureRecognizer.create_from_options(opts)
-        self._embedder.open()
+        try:
+            base_opts = mp_python.BaseOptions(model_asset_path=self.model_path)
+            opts = mp_vision.GestureRecognizerOptions(
+                base_options=base_opts,
+                running_mode=mp_vision.RunningMode.LIVE_STREAM,
+                num_hands=1,
+                result_callback=self._on_result,
+            )
+            self._recognizer = mp_vision.GestureRecognizer.create_from_options(opts)
+            self._embedder.open()
+        except Exception:
+            self._cap.release()
+            self._cap = None
+            raise
         self._start_ns = time.monotonic_ns()
 
     def read(self):
