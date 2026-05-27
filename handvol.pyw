@@ -137,6 +137,12 @@ def capture_loop(args, show_evt, worker_stop, icon):
                 if not args.no_audio:
                     media.play_pause()
 
+            elif event is Event.TOGGLE_PREVIEW:
+                if show_evt.is_set():
+                    show_evt.clear()
+                else:
+                    show_evt.set()
+
             elif event is Event.FOCUS_SPOTIFY:
                 result = spotify.focus_or_launch()
                 if args.debug:
@@ -218,7 +224,7 @@ def capture_loop(args, show_evt, worker_stop, icon):
             if machine.state != last_state or event is not Event.NONE:
                 if args.debug or event in (
                     Event.ENTER_SCRUB, Event.EXIT_SCRUB,
-                    Event.TOGGLE_MUTE, Event.TOGGLE_PLAYPAUSE,
+                    Event.TOGGLE_MUTE, Event.TOGGLE_PLAYPAUSE, Event.TOGGLE_PREVIEW,
                     Event.FOCUS_SPOTIFY, Event.EXIT_SPOTIFY,
                     Event.NEXT_TRACK, Event.PREV_TRACK,
                     Event.RESTART_PC, Event.SHUTDOWN_PC,

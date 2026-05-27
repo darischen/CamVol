@@ -15,6 +15,7 @@ class Event(str, Enum):
     EXIT_SCRUB = "exit_scrub"
     TOGGLE_MUTE = "toggle_mute"
     TOGGLE_PLAYPAUSE = "toggle_playpause"
+    TOGGLE_PREVIEW = "toggle_preview"
     FOCUS_SPOTIFY = "focus_spotify"
     EXIT_SPOTIFY = "exit_spotify"
     NEXT_TRACK = "next_track"
@@ -36,6 +37,7 @@ PALM = "Open_Palm"
 VICTORY = "Victory"
 ILOVEYOU = "ILoveYou"
 OK_SIGN = "OK_sign"
+POINTING_UP = "Pointing_Up"
 MIDDLE_FINGER = "middle_finger"
 DOUBLE_MIDDLE_FINGER = "double_middle_finger"
 LEFT_HAND_THUMB_LEFT = "left_hand_thumb_left"
@@ -62,6 +64,7 @@ class GestureStateMachine:
         self._palm_count = 0
         self._victory_count = 0
         self._iloveyou_count = 0
+        self._pointer_count = 0
         self._skip_count = 0
         self._prev_count = 0
         self._neutral_count = 0
@@ -77,6 +80,7 @@ class GestureStateMachine:
         self._palm_count = 0
         self._victory_count = 0
         self._iloveyou_count = 0
+        self._pointer_count = 0
         self._skip_count = 0
         self._prev_count = 0
         self._neutral_count = 0
@@ -91,6 +95,7 @@ class GestureStateMachine:
         self._palm_count = self._palm_count + 1 if gesture == PALM else 0
         self._victory_count = self._victory_count + 1 if gesture == VICTORY else 0
         self._iloveyou_count = self._iloveyou_count + 1 if gesture == ILOVEYOU else 0
+        self._pointer_count = self._pointer_count + 1 if gesture == POINTING_UP else 0
         self._skip_count = self._skip_count + 1 if is_skip else 0
         self._prev_count = self._prev_count + 1 if is_prev else 0
         # Hold timers: start on first sighting, clear the moment the gesture drops.
@@ -108,7 +113,7 @@ class GestureStateMachine:
             self._middle_start_t = None
             self._double_middle_start_t = None
         if is_skip or is_prev or gesture in (
-            OK_SIGN, FIST, PALM, VICTORY, ILOVEYOU,
+            OK_SIGN, FIST, PALM, VICTORY, ILOVEYOU, POINTING_UP,
             MIDDLE_FINGER, DOUBLE_MIDDLE_FINGER,
         ):
             self._neutral_count = 0
@@ -163,6 +168,11 @@ class GestureStateMachine:
                 self._cooldown_left = COOLDOWN_FRAMES
                 self._reset_counters()
                 return Event.TOGGLE_PLAYPAUSE
+            if self._pointer_count >= TOGGLE_FRAMES:
+                self.state = State.IDLE_COOLDOWN
+                self._cooldown_left = COOLDOWN_FRAMES
+                self._reset_counters()
+                return Event.TOGGLE_PREVIEW
             if self._victory_count >= TOGGLE_FRAMES:
                 self.state = State.IDLE_COOLDOWN
                 self._cooldown_left = COOLDOWN_FRAMES
