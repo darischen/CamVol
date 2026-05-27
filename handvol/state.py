@@ -1,3 +1,4 @@
+import time
 from enum import Enum
 
 
@@ -18,18 +19,25 @@ class Event(str, Enum):
     EXIT_SPOTIFY = "exit_spotify"
     NEXT_TRACK = "next_track"
     PREV_TRACK = "prev_track"
+    RESTART_PC = "restart_pc"
+    SHUTDOWN_PC = "shutdown_pc"
 
 
 SCRUB_ENTER_FRAMES = 5
 SCRUB_EXIT_FRAMES = 3
 TOGGLE_FRAMES = 5
 COOLDOWN_FRAMES = 10
+# Wall-clock hold for destructive system gestures. Frame-count debounces drift
+# with fps; restart/shutdown need a real 5-second deliberation regardless.
+HOLD_SECONDS = 5.0
 
 FIST = "Closed_Fist"
 PALM = "Open_Palm"
 VICTORY = "Victory"
 ILOVEYOU = "ILoveYou"
 OK_SIGN = "OK_sign"
+MIDDLE_FINGER = "middle_finger"
+DOUBLE_MIDDLE_FINGER = "double_middle_finger"
 LEFT_HAND_THUMB_LEFT = "left_hand_thumb_left"
 LEFT_HAND_THUMB_RIGHT = "left_hand_thumb_right"
 RIGHT_HAND_THUMB_LEFT = "right_hand_thumb_left"
@@ -58,6 +66,9 @@ class GestureStateMachine:
         self._prev_count = 0
         self._neutral_count = 0
         self._cooldown_left = 0
+        # Wall-clock start times for hold-gestures; None when not currently held.
+        self._middle_start_t = None
+        self._double_middle_start_t = None
 
     def _reset_counters(self):
         self._ok_count = 0
@@ -69,6 +80,8 @@ class GestureStateMachine:
         self._skip_count = 0
         self._prev_count = 0
         self._neutral_count = 0
+        self._middle_start_t = None
+        self._double_middle_start_t = None
 
     def _bump(self, gesture):
         is_skip = gesture in SKIP_GESTURES
@@ -80,7 +93,24 @@ class GestureStateMachine:
         self._iloveyou_count = self._iloveyou_count + 1 if gesture == ILOVEYOU else 0
         self._skip_count = self._skip_count + 1 if is_skip else 0
         self._prev_count = self._prev_count + 1 if is_prev else 0
-        if is_skip or is_prev or gesture in (OK_SIGN, FIST, PALM, VICTORY, ILOVEYOU):
+        # Hold timers: start on first sighting, clear the moment the gesture drops.
+        # Mutually exclusive — flipping between single and double restarts the clock.
+        now = time.monotonic()
+        if gesture == MIDDLE_FINGER:
+            if self._middle_start_t is None:
+                self._middle_start_t = now
+            self._double_middle_start_t = None
+        elif gesture == DOUBLE_MIDDLE_FINGER:
+            if self._double_middle_start_t is None:
+                self._double_middle_start_t = now
+            self._middle_start_t = None
+        else:
+            self._middle_start_t = None
+            self._double_middle_start_t = None
+        if is_skip or is_prev or gesture in (
+            OK_SIGN, FIST, PALM, VICTORY, ILOVEYOU,
+            MIDDLE_FINGER, DOUBLE_MIDDLE_FINGER,
+        ):
             self._neutral_count = 0
         else:
             self._neutral_count += 1
@@ -89,11 +119,36 @@ class GestureStateMachine:
         else:
             self._non_ok_count += 1
 
+    def get_hold_progress(self):
+        """Return (action_label, elapsed_seconds) if a hold is in progress, else None.
+
+        Used by the overlay to display a timer and action label during holds.
+        """
+        now = time.monotonic()
+        if self._middle_start_t is not None:
+            return ("RESTART", now - self._middle_start_t)
+        if self._double_middle_start_t is not None:
+            return ("SHUTDOWN", now - self._double_middle_start_t)
+        return None
+
     def step(self, gesture):
         gesture = gesture or "None"
         self._bump(gesture)
 
         if self.state is State.IDLE:
+            now = time.monotonic()
+            if (self._middle_start_t is not None
+                    and now - self._middle_start_t >= HOLD_SECONDS):
+                self.state = State.IDLE_COOLDOWN
+                self._cooldown_left = COOLDOWN_FRAMES
+                self._reset_counters()
+                return Event.RESTART_PC
+            if (self._double_middle_start_t is not None
+                    and now - self._double_middle_start_t >= HOLD_SECONDS):
+                self.state = State.IDLE_COOLDOWN
+                self._cooldown_left = COOLDOWN_FRAMES
+                self._reset_counters()
+                return Event.SHUTDOWN_PC
             if self._ok_count >= SCRUB_ENTER_FRAMES:
                 self.state = State.SCRUB
                 self._reset_counters()

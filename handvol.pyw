@@ -1,4 +1,5 @@
 import argparse
+import subprocess
 import threading
 import time
 from collections import deque
@@ -9,7 +10,7 @@ from pystray import Icon, Menu, MenuItem
 from handvol import audio, media, spotify
 from handvol.capture import GestureSource, MODEL_PATH
 from handvol.scrubber import VolumeScrubber
-from handvol.state import GestureStateMachine, State, Event
+from handvol.state import GestureStateMachine, State, Event, HOLD_SECONDS
 
 
 INDEX_TIP = 8  # MediaPipe landmark index for the index fingertip
@@ -91,7 +92,7 @@ def capture_loop(args, show_evt, worker_stop, icon):
     import cv2
     from handvol.overlay import (
         draw_state, draw_gesture, draw_volume, draw_fps,
-        draw_landmarks, draw_scrub_indicator,
+        draw_landmarks, draw_scrub_indicator, draw_hold_timer,
     )
 
     scrubber = VolumeScrubber(sensitivity=args.sensitivity, smoothing=args.smoothing)
@@ -109,7 +110,9 @@ def capture_loop(args, show_evt, worker_stop, icon):
             if frame is None:
                 break
 
-            gesture, score, landmarks = (latest if latest else ("None", 0.0, None))
+            gesture, score, landmarks, all_landmarks = (
+                latest if latest else ("None", 0.0, None, [])
+            )
             event = machine.step(gesture)
 
             if event is Event.ENTER_SCRUB and landmarks is not None:
@@ -152,6 +155,14 @@ def capture_loop(args, show_evt, worker_stop, icon):
                 if not args.no_audio:
                     media.previous_track()
 
+            elif event is Event.RESTART_PC:
+                print("[handvol] RESTART_PC fired — running 'shutdown /r /t 0'")
+                subprocess.Popen(["shutdown", "/r", "/t", "0"])
+
+            elif event is Event.SHUTDOWN_PC:
+                print("[handvol] SHUTDOWN_PC fired — running 'shutdown /s /t 0'")
+                subprocess.Popen(["shutdown", "/s", "/t", "0"])
+
             now = time.monotonic()
             dt = now - last_t
             last_t = now
@@ -175,10 +186,14 @@ def capture_loop(args, show_evt, worker_stop, icon):
 
             want_window = show_evt.is_set()
             if want_window:
-                if landmarks is not None:
-                    draw_landmarks(frame, landmarks)
+                for lm in all_landmarks:
+                    draw_landmarks(frame, lm)
                 draw_state(frame, machine.state.value)
                 draw_gesture(frame, gesture, score)
+                hold_progress = machine.get_hold_progress()
+                if hold_progress:
+                    action, elapsed = hold_progress
+                    draw_hold_timer(frame, action, elapsed, HOLD_SECONDS)
                 draw_volume(frame, vol_now)
                 if machine.state is State.SCRUB and scrubber.active and landmarks is not None:
                     tip_x, tip_y = scrub_tip(landmarks)
@@ -206,6 +221,7 @@ def capture_loop(args, show_evt, worker_stop, icon):
                     Event.TOGGLE_MUTE, Event.TOGGLE_PLAYPAUSE,
                     Event.FOCUS_SPOTIFY, Event.EXIT_SPOTIFY,
                     Event.NEXT_TRACK, Event.PREV_TRACK,
+                    Event.RESTART_PC, Event.SHUTDOWN_PC,
                 ):
                     print(f"[{machine.state.value:14s}] gesture={gesture:14s} "
                           f"event={event.value:18s} fps={fps:5.1f}")

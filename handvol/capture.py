@@ -56,6 +56,49 @@ def _detect_side_thumb(landmarks, handedness):
     return f"{hand_prefix}_thumb_{direction}"
 
 
+def _finger_states(landmarks):
+    """Return (thumb_open, index_open, middle_open, ring_open, pinky_open).
+
+    Non-thumb fingers count as open when the tip is above (smaller y) the PIP joint
+    — assumes a roughly upright hand, which matches how users hold up numbers.
+    Thumb uses a distance check against the index MCP so it works for either hand
+    without caring about left/right orientation.
+    """
+    index = landmarks[8].y < landmarks[6].y
+    middle = landmarks[12].y < landmarks[10].y
+    ring = landmarks[16].y < landmarks[14].y
+    pinky = landmarks[20].y < landmarks[18].y
+    # Thumb open: tip is meaningfully farther from the wrist than the MCP joint.
+    # Anchoring on the wrist (instead of the index MCP) separates open vs tucked
+    # for either hand and any thumb direction — same trick _detect_side_thumb uses.
+    wrist = landmarks[0]
+    tip_d = math.hypot(landmarks[4].x - wrist.x, landmarks[4].y - wrist.y)
+    mcp_d = math.hypot(landmarks[2].x - wrist.x, landmarks[2].y - wrist.y)
+    thumb = tip_d > mcp_d * 1.5
+    return thumb, index, middle, ring, pinky
+
+
+def _detect_three_fingers(landmarks):
+    if not landmarks or len(landmarks) < 21:
+        return False
+    t, i, m, r, p = _finger_states(landmarks)
+    return i and m and r and not p and not t
+
+
+def _detect_four_fingers(landmarks):
+    if not landmarks or len(landmarks) < 21:
+        return False
+    t, i, m, r, p = _finger_states(landmarks)
+    return i and m and r and p and not t
+
+
+def _detect_middle_finger(landmarks):
+    if not landmarks or len(landmarks) < 21:
+        return False
+    _, i, m, r, p = _finger_states(landmarks)
+    return m and not i and not r and not p
+
+
 def _detect_ok_sign(landmarks):
     """Return True if the 21 hand landmarks form an OK sign.
 
@@ -72,6 +115,35 @@ def _detect_ok_sign(landmarks):
     ring_extended = landmarks[16].y < landmarks[14].y
     pinky_extended = landmarks[20].y < landmarks[18].y
     return middle_extended and ring_extended and pinky_extended
+
+
+FINGER_COUNT = {
+    "Closed_Fist": 0,
+    "Pointing_Up": 1,
+    "Victory": 2,
+    "three_fingers": 3,
+    "four_fingers": 4,
+    "Open_Palm": 5,
+}
+
+
+def _resolve_hand(landmarks, handedness, mp_name, mp_score):
+    """Pick the best label for a single hand, preferring our custom detectors
+    over MediaPipe's built-in category. Custom detectors run first so that, e.g.,
+    a 4-fingers-up gesture lands as 'four_fingers' even if MediaPipe would have
+    called it Open_Palm."""
+    if _detect_ok_sign(landmarks):
+        return "OK_sign", 1.0
+    side = _detect_side_thumb(landmarks, handedness)
+    if side is not None:
+        return side, 1.0
+    if _detect_middle_finger(landmarks):
+        return "middle_finger", 1.0
+    if _detect_three_fingers(landmarks):
+        return "three_fingers", 1.0
+    if _detect_four_fingers(landmarks):
+        return "four_fingers", 1.0
+    return mp_name, mp_score
 
 
 class GestureSource:
@@ -94,28 +166,50 @@ class GestureSource:
         self._start_ns = None
 
     def _on_result(self, result, output_image, timestamp_ms):
-        gesture_name = "None"
-        score = 0.0
-        landmarks = None
-        handedness = None
-        if result.gestures and result.gestures[0]:
-            top = result.gestures[0][0]
-            gesture_name = top.category_name or "None"
-            score = top.score
-        if result.handedness and result.handedness[0]:
-            handedness = result.handedness[0][0].category_name
-        if result.hand_landmarks:
-            landmarks = result.hand_landmarks[0]
-            if _detect_ok_sign(landmarks):
-                gesture_name = "OK_sign"
-                score = 1.0
+        hands = []  # list of (name, score, landmarks)
+        n = len(result.hand_landmarks) if result.hand_landmarks else 0
+        for i in range(n):
+            lm = result.hand_landmarks[i]
+            hd = None
+            if result.handedness and i < len(result.handedness) and result.handedness[i]:
+                hd = result.handedness[i][0].category_name
+            mp_name, mp_score = "None", 0.0
+            if result.gestures and i < len(result.gestures) and result.gestures[i]:
+                top = result.gestures[i][0]
+                mp_name = top.category_name or "None"
+                mp_score = top.score
+            name, score = _resolve_hand(lm, hd, mp_name, mp_score)
+            hands.append((name, score, lm))
+
+        if len(hands) >= 2:
+            n0, s0, lm0 = hands[0]
+            n1, s1, lm1 = hands[1]
+            # Two-hand combinations are only meaningful when both hands have a
+            # recognized "count contribution"; otherwise we fall back to hand 0
+            # so existing single-hand controls (OK_sign scrub, side-thumbs) keep
+            # working even when a second hand wanders into frame.
+            if n0 == "middle_finger" and n1 == "middle_finger":
+                gesture_name, score, primary_lm = "double_middle_finger", 1.0, lm0
             else:
-                side = _detect_side_thumb(landmarks, handedness)
-                if side is not None:
-                    gesture_name = side
-                    score = 1.0
+                c0 = FINGER_COUNT.get(n0)
+                c1 = FINGER_COUNT.get(n1)
+                if c0 is not None and c1 is not None and 1 <= c0 + c1 <= 10:
+                    gesture_name, score, primary_lm = f"Number_{c0 + c1}", 1.0, lm0
+                else:
+                    # Prefer whichever hand is making a scrub-eligible gesture so
+                    # OK_sign scrubbing still anchors on the right hand's tips.
+                    if n1 == "OK_sign" and n0 != "OK_sign":
+                        gesture_name, score, primary_lm = n1, s1, lm1
+                    else:
+                        gesture_name, score, primary_lm = n0, s0, lm0
+        elif len(hands) == 1:
+            gesture_name, score, primary_lm = hands[0]
+        else:
+            gesture_name, score, primary_lm = "None", 0.0, None
+
+        all_lm = [h[2] for h in hands]
         with self._lock:
-            self._latest = (gesture_name, score, landmarks)
+            self._latest = (gesture_name, score, primary_lm, all_lm)
 
     def open(self):
         self._cap = cv2.VideoCapture(self.cam_index, cv2.CAP_DSHOW)
@@ -128,7 +222,7 @@ class GestureSource:
         opts = mp_vision.GestureRecognizerOptions(
             base_options=base_opts,
             running_mode=mp_vision.RunningMode.LIVE_STREAM,
-            num_hands=1,
+            num_hands=2,
             result_callback=self._on_result,
         )
         self._recognizer = mp_vision.GestureRecognizer.create_from_options(opts)

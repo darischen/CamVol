@@ -60,6 +60,12 @@ def draw_landmarks(frame, landmarks, color=GRAY):
         cv2.circle(frame, p, 2, color, -1, cv2.LINE_AA)
 
 
+def draw_hold_timer(frame, action, elapsed_seconds, threshold=5.0):
+    """Draw hold timer for destructive gestures (e.g., 'RESTART 2.3s / 5.0s')."""
+    label = f"{action} {elapsed_seconds:.1f}s / {threshold:.1f}s"
+    _put(frame, label, (10, 84), RED, 0.6)
+
+
 def draw_scrub_indicator(frame, anchor_y_norm, tip_y_norm, tip_x_norm):
     """Cyan horizontal line at anchor, dot at tip, vertical connector."""
     if anchor_y_norm is None or tip_y_norm is None:
