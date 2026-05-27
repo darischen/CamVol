@@ -87,27 +87,6 @@ the full 5 seconds.
 | `--no-audio` | Skip all pycaw/media calls — overlay only, for tuning. |
 | `--show` | Start with the preview window already open (otherwise tray-only). |
 
-## Face recognition (gesture lock)
-
-HandVol gates gesture control behind face recognition: only the
-calibrated user's face will unlock gestures. With no profile, or when
-the user's face is not visible, gestures are ignored and the preview
-overlay shows **LOCKED** (red) or **NO PROFILE** (gray) in the top
-right. When you are recognized, it shows **UNLOCKED** (green).
-
-**Calibrate via the tray menu** — right-click the HandVol icon and
-choose **Calibrate face...**, or run `python -m handvol.calibration`
-from the command line. You will be walked through ~20 short poses
-(looking up/down/left/right, diagonals, profile views, two close/far
-variations). Hold each pose at a neutral resting expression for ~2
-seconds. Headphones are fine for most poses; you will be prompted to
-briefly remove over-ear headphones for the two profile captures so the
-ear/jawline is visible.
-
-The face profile is stored at `data/face_profile.npz` and is **never**
-committed to git (the `data/` directory is gitignored). Face embeddings
-are biometric data — keep the file local.
-
 ## Launch silently at startup
 
 1. Press `Win+R`, type `shell:startup`, Enter.
