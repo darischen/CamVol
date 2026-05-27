@@ -6,9 +6,8 @@ from collections import deque
 
 from PIL import Image, ImageDraw, ImageFont
 from pystray import Icon, Menu, MenuItem
-import keyboard
 
-from handvol import audio, media, spotify, taskbar, vscode
+from handvol import audio, media, spotify, taskbar, vscode, shortcuts
 from handvol import discord as discord_app
 from handvol.capture import GestureSource, MODEL_PATH
 from handvol.scrubber import VolumeScrubber
@@ -181,30 +180,14 @@ def capture_loop(args, show_evt, worker_stop, icon):
                     print(f"  chrome 2: {result}")
 
             elif event is Event.OPEN_TASK_MANAGER:
-                keyboard.press("ctrl")
-                time.sleep(0.05)
-                keyboard.press("shift")
-                time.sleep(0.05)
-                keyboard.press("esc")
-                time.sleep(0.05)
-                keyboard.release("esc")
-                time.sleep(0.05)
-                keyboard.release("shift")
-                time.sleep(0.05)
-                keyboard.release("ctrl")
+                result = shortcuts.open_task_manager()
                 if args.debug:
-                    print(f"  open task manager")
+                    print(f"  task manager: {result}")
 
             elif event is Event.CLOSE_WINDOW:
-                keyboard.press("alt")
-                time.sleep(0.05)
-                keyboard.press("F4")
-                time.sleep(0.05)
-                keyboard.release("F4")
-                time.sleep(0.05)
-                keyboard.release("alt")
+                result = shortcuts.close_window()
                 if args.debug:
-                    print(f"  close window")
+                    print(f"  close window: {result}")
 
             elif event is Event.NEXT_TRACK:
                 if not args.no_audio:
