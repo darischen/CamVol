@@ -19,6 +19,14 @@ _DEFAULT_MODEL_PATH = (
 )
 MAX_FACES = 1  # Only the most prominent face is needed; MediaPipe picks it.
 
+# Coalescing rate-limit on face landmarker submissions. The 478-point
+# mesh inference is heavy enough that submitting at full camera FPS
+# (30 Hz) can saturate it on modest CPUs and back the main loop down to
+# ~15 FPS through scheduler back-pressure. 10 Hz is plenty for the dots
+# overlay and bbox refresh; identity is checked even less often (~3 Hz
+# in IdentityEncoder), so the bbox handoff stays fresh enough.
+FACE_EMBED_MIN_INTERVAL_MS = 100
+
 
 def landmarks_to_bbox(face_landmarks, frame_shape):
     """Compute the pixel bbox enclosing a MediaPipe face landmark list.
@@ -51,12 +59,16 @@ class FaceEmbedder:
     `latest()`. Mirrors the GestureSource async pattern in capture.py.
     """
 
-    def __init__(self, model_path=None):
+    def __init__(self, model_path=None, min_interval_ms=FACE_EMBED_MIN_INTERVAL_MS):
         self.model_path = str(model_path or _DEFAULT_MODEL_PATH)
         self._lock = threading.Lock()
         self._latest_face_landmarks: list = []  # list[list[NormalizedLandmark]]
         self._latest_ts_ns = 0
         self._landmarker = None
+        # Wall-clock throttle: drop submit() calls closer than this to
+        # the previous accepted call. Coalescing — never queues.
+        self._min_interval_s = min_interval_ms / 1000.0
+        self._last_submit_t = 0.0
 
     def open(self) -> None:
         base_opts = mp_python.BaseOptions(model_asset_path=self.model_path)
@@ -76,6 +88,10 @@ class FaceEmbedder:
     def submit(self, mp_image, ts_ms: int) -> None:
         if self._landmarker is None:
             return
+        now = time.monotonic()
+        if now - self._last_submit_t < self._min_interval_s:
+            return  # coalesce — face mesh inference is too slow for per-frame
+        self._last_submit_t = now
         self._landmarker.detect_async(mp_image, ts_ms)
 
     def latest(self):
