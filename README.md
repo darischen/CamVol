@@ -20,12 +20,12 @@ to restart your PC, or double middle finger to shut it down.
 | Fist + Victory | Number 2 — Cycle to second Chrome window (Win+1 twice) |
 | Fist + 3 fingers | Number 3 — Focus Discord (launch it if not running) |
 | Fist + 4 fingers | Number 4 — Focus VS Code (launch it if not running) |
-| Fist + Open palm | Number 5 |
+| Fist + Open palm | Number 5 — Open Task Manager (Ctrl+Shift+Esc) |
 | Open palm + Pointer | Number 6 |
 | Open palm + Victory | Number 7 |
 | Open palm + 3 fingers | Number 8 |
 | Open palm + 4 fingers | Number 9 |
-| Open palm + Open palm | Number 10 |
+| Open palm + Open palm | Number 10 — Close active window (Alt+F4) |
 | 🖕 Single middle finger (5s hold) | **Restart Windows** |
 | 🖕🖕 Double middle finger (5s hold) | **Shut down Windows** |
 
