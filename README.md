@@ -53,13 +53,13 @@ toggling the pause state again.
 
 **Voice Search:** Form `number_6` (open palm + pointer) to focus Chrome,
 open a new tab, and start dictating. Your speech is transcribed locally
-with `faster-whisper` (`base.en`, int8, CPU) — no cloud calls. The tray
+with `faster-whisper` (`small.en`, int8, CPU) — no cloud calls. The tray
 icon turns into a red microphone and HandVol auto-locks gestures while
 recording. After 1 second of silence, the transcript is typed into the
 URL bar and Enter fires automatically. If no speech is detected within
 ~5 seconds, the trigger times out cleanly with no typing.
 
-First invocation downloads the `base.en` model (~140 MB) into the
+First invocation downloads the `small.en` model (~460 MB) into the
 HuggingFace cache.
 
 ## Requirements

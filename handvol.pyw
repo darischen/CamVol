@@ -471,9 +471,9 @@ def main():
 
     try:
         from faster_whisper import WhisperModel
-        whisper_model = WhisperModel("base.en", device="cpu", compute_type="int8")
+        whisper_model = WhisperModel("small.en", device="cpu", compute_type="int8")
         _voice_search_holder["instance"] = VoiceSearch(model=whisper_model)
-        print("[handvol] voice search ready (faster-whisper base.en, int8 CPU)")
+        print("[handvol] voice search ready (faster-whisper small.en, int8 CPU)")
     except Exception as exc:
         print(f"[handvol] voice search disabled: {exc!r}")
 
