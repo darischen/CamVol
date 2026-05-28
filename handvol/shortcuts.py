@@ -1,6 +1,6 @@
 """Send system shortcuts via pyautogui.
 
-Alt+F4 for close window, Ctrl+Shift+Esc for Task Manager.
+Alt+F4 for close window, Ctrl+Shift+Esc for Task Manager, Ctrl+T for new tab.
 Follows the same pattern as taskbar.focus_slot() for robustness.
 """
 import time
@@ -39,6 +39,25 @@ def open_task_manager():
         finally:
             time.sleep(INTER_KEY_DELAY)
             pyautogui.keyUp("shift")
+            time.sleep(INTER_KEY_DELAY)
+            pyautogui.keyUp("ctrl")
+        return "ok"
+    except Exception:
+        return "failed"
+
+
+def open_new_tab():
+    """Send Ctrl+T to open a new tab in the active window. Returns 'ok' or 'failed'.
+
+    Mirrors close_window()'s modifier-warmup + try/finally pattern so the
+    Ctrl modifier is always released, even on exception.
+    """
+    try:
+        pyautogui.keyDown("ctrl")
+        try:
+            time.sleep(MODIFIER_WARMUP)
+            pyautogui.press("t")
+        finally:
             time.sleep(INTER_KEY_DELAY)
             pyautogui.keyUp("ctrl")
         return "ok"

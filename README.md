@@ -22,7 +22,7 @@ to restart your PC, or double middle finger to shut it down.
 | Fist + 3 fingers | Number 3 — Focus Discord (launch it if not running) |
 | Fist + 4 fingers | Number 4 — Focus VS Code (launch it if not running) |
 | Fist + Open palm | Number 5 — Open Task Manager (Ctrl+Shift+Esc) |
-| Open palm + Pointer | Number 6 |
+| Open palm + Pointer | Number 6 — Voice search (focus Chrome, Ctrl+T, dictate, auto-Enter after 1s silence) |
 | Open palm + Victory | Number 7 |
 | Open palm + 3 fingers | Number 8 |
 | Open palm + 4 fingers | Number 9 — Lock Gesture |
@@ -50,6 +50,17 @@ don't want HandVol responding to your hands.
 the camera, or use the *Pause* option in the tray menu. Useful before
 joining video calls or when another app needs camera access. Resume by
 toggling the pause state again.
+
+**Voice Search:** Form `number_6` (open palm + pointer) to focus Chrome,
+open a new tab, and start dictating. Your speech is transcribed locally
+with `faster-whisper` (`small.en`, int8, CPU) — no cloud calls. The tray
+icon turns into a red microphone and HandVol auto-locks gestures while
+recording. After 1 second of silence, the transcript is typed into the
+URL bar and Enter fires automatically. If no speech is detected within
+~5 seconds, the trigger times out cleanly with no typing.
+
+First invocation downloads the `small.en` model (~460 MB) into the
+HuggingFace cache.
 
 ## Requirements
 
