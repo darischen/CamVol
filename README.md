@@ -16,7 +16,6 @@ to restart your PC, or double middle finger to shut it down.
 | 👉 Thumb sideways → right | Next track (works for either hand) |
 | 👈 Thumb sideways → left | Previous track (works for either hand) |
 | 🤘 Hang loose sign | Pause app & release camera |
-| 🔒 Lock icon (overlay) | Shows lock state; when red/active, gestures recognized but task execution blocked |
 | **Number gestures (two hands)** | **Display recognized number 1-10** |
 | Fist + Pointer | Number 1 — Focus first Chrome window (Win+1; launch Chrome if not running) |
 | Fist + Victory | Number 2 — Cycle to second Chrome window (Win+1 twice) |
@@ -26,10 +25,10 @@ to restart your PC, or double middle finger to shut it down.
 | Open palm + Pointer | Number 6 |
 | Open palm + Victory | Number 7 |
 | Open palm + 3 fingers | Number 8 |
-| Open palm + 4 fingers | Number 9 |
+| Open palm + 4 fingers | Number 9 — Lock Gesture |
 | Open palm + Open palm | Number 10 — Close active window (Alt+F4) |
-| 🖕 Single middle finger (5s hold) | **Restart Windows** |
-| 🖕🖕 Double middle finger (5s hold) | **Shut down Windows** |
+| 🖕 Single middle finger (3s hold) | **Restart Windows** |
+| 🖕🖕 Double middle finger (3s hold) | **Shut down Windows** |
 
 Direction is reported in your real-world frame: thumb tip toward your
 right = next, toward your left = previous, regardless of which hand.
@@ -43,11 +42,11 @@ thumbs.
 
 **Lock State:** When the lock icon displays red in the overlay, gesture
 execution is blocked to prevent accidental actions. Gestures are still
-recognized, allowing number_9 (double middle finger) to toggle the lock
+recognized, allowing number_9 (nine fingers) to toggle the lock
 even when active. Use this before focusing on other tasks or when you
 don't want HandVol responding to your hands.
 
-**Camera Release:** The hang loose sign (🤘) pauses the app and releases
+**Camera Release:** The hang loose sign (shaka) pauses the app and releases
 the camera, or use the *Pause* option in the tray menu. Useful before
 joining video calls or when another app needs camera access. Resume by
 toggling the pause state again.
@@ -88,8 +87,8 @@ the preview already open.
 
 **Hold gesture feedback:** When you hold a middle finger (or double middle finger),
 the preview overlay displays a red timer showing elapsed time and the action it
-will trigger (e.g., `RESTART 2.3s / 5.0s`). The action fires once you hold for
-the full 5 seconds.
+will trigger (e.g., `RESTART 2.3s / 3.0s`). The action fires once you hold for
+the full 3.0 seconds.
 
 ### Useful flags
 
