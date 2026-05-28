@@ -15,6 +15,8 @@ to restart your PC, or double middle finger to shut it down.
 | 🤟 ILoveYou | Close Spotify |
 | 👉 Thumb sideways → right | Next track (works for either hand) |
 | 👈 Thumb sideways → left | Previous track (works for either hand) |
+| 🤘 Hang loose sign | Pause app & release camera |
+| 🔒 Lock icon (overlay) | Shows lock state; when red/active, gestures recognized but task execution blocked |
 | **Number gestures (two hands)** | **Display recognized number 1-10** |
 | Fist + Pointer | Number 1 — Focus first Chrome window (Win+1; launch Chrome if not running) |
 | Fist + Victory | Number 2 — Cycle to second Chrome window (Win+1 twice) |
@@ -36,6 +38,19 @@ No model training, no cloud calls, no per-app permissions. Runs locally
 off the pretrained MediaPipe Gesture Recognizer, with custom
 landmark-based detection layered on top for the OK sign and sideways
 thumbs.
+
+## Extra Features
+
+**Lock State:** When the lock icon displays red in the overlay, gesture
+execution is blocked to prevent accidental actions. Gestures are still
+recognized, allowing number_9 (double middle finger) to toggle the lock
+even when active. Use this before focusing on other tasks or when you
+don't want HandVol responding to your hands.
+
+**Camera Release:** The hang loose sign (🤘) pauses the app and releases
+the camera, or use the *Pause* option in the tray menu. Useful before
+joining video calls or when another app needs camera access. Resume by
+toggling the pause state again.
 
 ## Requirements
 
@@ -64,7 +79,7 @@ overflow on a fresh Windows install — drag it onto the taskbar to pin).
 - **Left-click the tray icon** → toggle the OpenCV preview window on/off.
 - **Right-click** → menu with *Show preview* (checked when visible),
   *Pause* (releases the camera; useful before joining a virtual meeting),
-  *Calibrate face...* (launches the face calibration flow), and *Quit*.
+  and *Quit*.
 - **Esc** inside the preview window also hides it.
 - To quit, use the tray's *Quit* item (or kill `pythonw.exe` from Task Manager).
 
@@ -119,17 +134,11 @@ tests/
 └── test_face_profile.py    Unit tests for FaceProfile save/load + matching
 ```
 
-See [`CONTEXT.md`](CONTEXT.md) for the full design doc: gesture-mapping
-rationale, scrub algorithm derivation, state-machine debounce thresholds,
-and acceptance criteria.
-
 ### Gesture detection internals
 
 MediaPipe's built-in classifier handles `Closed_Fist`, `Open_Palm`,
-`Victory`, and `ILoveYou` directly. The OK sign and the four sideways
-thumb labels (`left_hand_thumb_left`, `left_hand_thumb_right`,
-`right_hand_thumb_left`, `right_hand_thumb_right`) are detected from the
-21 hand landmarks in `capture.py`:
+`Victory`, and `ILoveYou` directly. Custom landmark-based detection in
+`capture.py` covers:
 
 - **OK sign:** thumb tip touches index tip; middle, ring, pinky extended.
 - **Sideways thumb:** thumb extended horizontally with the other four
@@ -137,6 +146,13 @@ thumb labels (`left_hand_thumb_left`, `left_hand_thumb_right`,
   relative to the thumb base; hand identity comes from MediaPipe's
   handedness (with the convention inverted because the frame is
   pre-mirrored for selfie view).
+- **Hang loose sign:** thumb and pinky extended, other three fingers
+  curled into a fist. Triggers pause/resume and camera release.
+
+The lock icon in the overlay indicates the current lock state (unlocked
+by default). Lock state is toggled via number_9 (double middle finger)
+and blocks all gesture-triggered actions while still recognizing gestures
+in the frame.
 
 Tuning constants for the landmark checks live at the top of
 `handvol/capture.py`.
