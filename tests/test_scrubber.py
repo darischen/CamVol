@@ -64,3 +64,21 @@ def test_palm_toggles_playpause_once():
     events = [sm.step(PALM) for _ in range(5)]
     assert events[-1] is Event.TOGGLE_PLAYPAUSE
     assert sm.state is State.IDLE_COOLDOWN
+
+
+def test_state_machine_number_6_fires_voice_search():
+    from handvol.state import NUMBER_6, TOGGLE_FRAMES
+    sm = GestureStateMachine()
+    events = [sm.step(NUMBER_6) for _ in range(TOGGLE_FRAMES)]
+    assert events[-1] is Event.VOICE_SEARCH
+    assert all(e is Event.NONE for e in events[:-1])
+
+
+def test_state_machine_number_6_resets_after_cooldown():
+    from handvol.state import NUMBER_6, TOGGLE_FRAMES
+    sm = GestureStateMachine()
+    for _ in range(TOGGLE_FRAMES):
+        sm.step(NUMBER_6)
+    # After firing once, machine enters IDLE_COOLDOWN; should not refire immediately.
+    next_events = [sm.step(NUMBER_6) for _ in range(TOGGLE_FRAMES)]
+    assert Event.VOICE_SEARCH not in next_events
