@@ -17,6 +17,9 @@ SIDE_THUMB_HORIZ_RATIO = 1.2   # |dx| must exceed |dy| by this factor
 SIDE_THUMB_EXTEND_RATIO = 1.3  # tip-to-wrist must exceed cmc-to-wrist by this factor
 SIDE_THUMB_CURL_RATIO = 1.2    # fingertip-to-wrist must stay within this * mcp-to-wrist
 
+HANG_LOOSE_PINKY_EXTEND_RATIO = 1.5  # pinky tip-to-wrist must exceed mcp-to-wrist by this factor
+HANG_LOOSE_CURL_RATIO = 1.2          # curled fingers' tip-to-wrist must stay within this * mcp-to-wrist
+
 
 def _detect_side_thumb(landmarks, handedness):
     """Return a label like 'left_hand_thumb_right' or None.
@@ -117,6 +120,35 @@ def _detect_ok_sign(landmarks):
     return middle_extended and ring_extended and pinky_extended
 
 
+def _detect_hang_loose(landmarks):
+    """Return True for a shaka: thumb + pinky extended, index/middle/ring curled.
+
+    Layered on top of _finger_states so direction/handedness don't matter, with
+    extra ratio checks to demand a real extension on the pinky and tight curls
+    on the middle three — same scale-invariant trick _detect_side_thumb uses.
+    """
+    if not landmarks or len(landmarks) < 21:
+        return False
+    t, i, m, r, p = _finger_states(landmarks)
+    if not (t and p and not i and not m and not r):
+        return False
+
+    wrist = landmarks[0]
+    pinky_tip_d = math.hypot(landmarks[20].x - wrist.x, landmarks[20].y - wrist.y)
+    pinky_mcp_d = math.hypot(landmarks[17].x - wrist.x, landmarks[17].y - wrist.y)
+    if pinky_tip_d < pinky_mcp_d * HANG_LOOSE_PINKY_EXTEND_RATIO:
+        return False
+
+    for mcp_idx, tip_idx in ((5, 8), (9, 12), (13, 16)):
+        mcp = landmarks[mcp_idx]
+        tip = landmarks[tip_idx]
+        mcp_to_wrist = math.hypot(mcp.x - wrist.x, mcp.y - wrist.y)
+        tip_to_wrist = math.hypot(tip.x - wrist.x, tip.y - wrist.y)
+        if tip_to_wrist > mcp_to_wrist * HANG_LOOSE_CURL_RATIO:
+            return False
+    return True
+
+
 FINGER_COUNT = {
     "Closed_Fist": 0,
     "Pointing_Up": 1,
@@ -139,6 +171,8 @@ def _resolve_hand(landmarks, handedness, mp_name, mp_score):
         return side, 1.0
     if _detect_middle_finger(landmarks):
         return "middle_finger", 1.0
+    if _detect_hang_loose(landmarks):
+        return "hang_loose", 1.0
     if _detect_three_fingers(landmarks):
         return "three_fingers", 1.0
     if _detect_four_fingers(landmarks):

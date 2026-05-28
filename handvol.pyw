@@ -95,7 +95,7 @@ def make_volume_image(level, dimmed=False, locked=False):
     return img
 
 
-def capture_loop(args, show_evt, worker_stop, icon):
+def capture_loop(args, show_evt, worker_stop, icon, request_pause):
     """Runs on a worker thread. Owns the camera, the model, and (when toggled
     on) the OpenCV window. cv2 + overlay are imported here so we only pay the
     cost when the worker actually starts. worker_stop is signaled both for
@@ -200,6 +200,11 @@ def capture_loop(args, show_evt, worker_stop, icon):
                 if args.debug:
                     print(f"  close window: {result}")
 
+            elif event is Event.PAUSE_CAMERA:
+                if args.debug:
+                    print("  pause camera (hang loose)")
+                request_pause()
+
             elif event is Event.TOGGLE_LOCK:
                 locked = not locked
                 if args.debug:
@@ -286,6 +291,7 @@ def capture_loop(args, show_evt, worker_stop, icon):
                     Event.FOCUS_CHROME_1, Event.FOCUS_CHROME_2,
                     Event.NEXT_TRACK, Event.PREV_TRACK,
                     Event.RESTART_PC, Event.SHUTDOWN_PC, Event.OPEN_TASK_MANAGER, Event.CLOSE_WINDOW,
+                    Event.PAUSE_CAMERA,
                 ):
                     print(f"[{machine.state.value:14s}] gesture={gesture:14s} "
                           f"event={event.value:18s} fps={fps:5.1f}")
@@ -323,14 +329,18 @@ def main():
         worker_state["stop"] = threading.Event()
         worker_state["thread"] = threading.Thread(
             target=capture_loop,
-            args=(args, show_evt, worker_state["stop"], icon),
+            args=(args, show_evt, worker_state["stop"], icon, lambda: on_pause(icon, None)),
             daemon=True)
         worker_state["thread"].start()
 
     def stop_worker():
         if worker_state["stop"] is not None:
             worker_state["stop"].set()
-        if worker_state["thread"] is not None:
+        # Skip the join when called from the worker itself (gesture-triggered
+        # pause) — joining your own thread raises RuntimeError. The loop will
+        # exit cleanly on its next iteration anyway once worker_stop is set.
+        if (worker_state["thread"] is not None
+                and worker_state["thread"] is not threading.current_thread()):
             worker_state["thread"].join(timeout=2.0)
 
     def on_toggle(icon, item):
@@ -353,6 +363,10 @@ def main():
             except Exception:
                 vol = 0
             icon.icon = make_volume_image(vol, dimmed=True)
+        # Force pystray to re-evaluate the `checked` lambdas. Without this, the
+        # tray menu's check state can lag behind paused["v"] when the flip was
+        # triggered by the gesture rather than a click.
+        icon.update_menu()
 
     def on_quit(icon, item):
         stop_worker()
