@@ -20,8 +20,13 @@ from enum import Enum
 
 import numpy as np
 import pyautogui
+import pyperclip
 import sounddevice as sd
 import webrtcvad
+
+
+MODIFIER_WARMUP = 0.05
+INTER_KEY_DELAY = 0.05
 
 
 class Phase(str, Enum):
@@ -99,9 +104,11 @@ FRAME_SAMPLES = SAMPLE_RATE * FRAME_DURATION_MS // 1000  # 480 samples
 # to keep quiet speech.
 VAD_AGGRESSIVENESS = 2
 
-# pyautogui per-character interval when typing the transcript. Small but
-# non-zero so the URL bar reliably ingests each char even on a busy CPU.
-TYPE_INTERVAL_S = 0.005
+# Paste the transcript via clipboard rather than pyautogui.write(): write()
+# silently drops non-ASCII chars and uses an implicit Shift modifier for
+# punctuation with no try/finally guard — both classes of bug the codebase
+# explicitly avoids elsewhere (see handvol/taskbar.py).
+pyautogui.PAUSE = 0
 
 
 class VoiceSearch:
@@ -203,7 +210,18 @@ class VoiceSearch:
         if not text:
             return "empty"
 
-        pyautogui.write(text, interval=TYPE_INTERVAL_S)
+        pyperclip.copy(text)
+        try:
+            pyautogui.keyDown("ctrl")
+            try:
+                time.sleep(MODIFIER_WARMUP)
+                pyautogui.press("v")
+            finally:
+                time.sleep(INTER_KEY_DELAY)
+                pyautogui.keyUp("ctrl")
+        except Exception as exc:
+            print(f"[voice_search] paste failed: {exc!r}")
+            return "error"
         # Small gap so the URL bar finishes ingesting before Enter commits.
         time.sleep(0.05)
         pyautogui.press("enter")

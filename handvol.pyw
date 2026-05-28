@@ -152,19 +152,23 @@ def capture_loop(args, show_evt, worker_stop, icon, request_pause):
     last_rendered_vol = None
     locked = False
 
-    voice_state = {"active": False, "was_locked": False, "completed": False}
+    voice_state = {"active": False, "was_locked": False}
+    # threading.Event gives an explicit happens-before for the cross-thread
+    # handoff. The VoiceSearch daemon sets it; the capture loop checks and
+    # clears it each iteration. The cooldown in the state machine already
+    # prevents a second VOICE_SEARCH dispatch within the same restoration
+    # window, but Event makes the synchronization explicit either way.
+    voice_done_evt = threading.Event()
 
-    # Lazy-load: the model is constructed in main() and passed in (see Step 7).
-    # Here we just capture the reference from the module-level holder.
+    # Lazy-load: the model is constructed in main() and stored on the
+    # module-level holder. Read the reference once when the loop starts.
     voice_search = _voice_search_holder.get("instance")
 
     def on_voice_done(result):
-        # Called from the VoiceSearch worker thread. Don't mutate shared
-        # state here beyond the dict flag — the capture loop polls and
-        # applies the restoration on its own thread.
+        # Invoked on the VoiceSearch worker thread.
         if args.debug:
             print(f"  voice search done: {result}")
-        voice_state["completed"] = True
+        voice_done_evt.set()
 
     with GestureSource(cam_index=args.cam) as source:
         while not worker_stop.is_set():
@@ -318,8 +322,8 @@ def capture_loop(args, show_evt, worker_stop, icon, request_pause):
                     icon.icon = make_volume_image(vol_int, locked=locked)
                     last_rendered_vol = vol_int
 
-            if voice_state["completed"]:
-                voice_state["completed"] = False
+            if voice_done_evt.is_set():
+                voice_done_evt.clear()
                 voice_state["active"] = False
                 locked = voice_state["was_locked"]
                 last_rendered_vol = None  # force tray glyph re-render on next tick
