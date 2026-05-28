@@ -84,28 +84,26 @@ def enable_site_packages():
     pth = pth_files[0]
 
     lines = pth.read_text(encoding="utf-8").splitlines()
-    out = []
-    have_site_packages = False
-    for line in lines:
-        stripped = line.strip()
-        if re.match(r"#\s*import site$", stripped):
-            out.append("import site")
-            continue
-        if stripped in ("Lib\\site-packages", "Lib/site-packages"):
-            have_site_packages = True
-        out.append(line)
-    if not have_site_packages:
-        # Insert site-packages right after the "." (script dir) entry if present,
-        # otherwise just append it.
-        if "." in out:
-            out.insert(out.index(".") + 1, "Lib\\site-packages")
-        else:
-            out.append("Lib\\site-packages")
+    out = ["import site" if re.match(r"#\s*import site$", ln.strip()) else ln
+           for ln in lines]
+
+    # Path entries the bundled runtime needs (relative to the python dir):
+    #   ..                  the install root next to handvol.pyw, so `import
+    #                        handvol` (the package) resolves. A ._pth file
+    #                        SUPPRESSES the usual "script dir on sys.path[0]"
+    #                        behavior, so without this the app dies at
+    #                        `from handvol import ...` with ModuleNotFoundError.
+    #   Lib\site-packages   the pip-installed dependencies.
+    anchor = out.index(".") + 1 if "." in out else len(out)
+    for entry in ("..", "Lib\\site-packages"):
+        if entry not in (l.strip() for l in out):
+            out.insert(anchor, entry)
+            anchor += 1
     if "import site" not in out:
         out.append("import site")
 
     pth.write_text("\n".join(out) + "\n", encoding="utf-8")
-    log(f"OK  patched {pth.name} (site enabled, Lib\\site-packages on path)")
+    log(f"OK  patched {pth.name} (site enabled; .. and Lib\\site-packages on path)")
 
 
 def bootstrap_pip():

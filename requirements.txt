@@ -9,4 +9,4 @@ pystray>=0.19
 Pillow>=10.0
 faster-whisper>=1.0.0
 sounddevice>=0.4.6
-webrtcvad>=2.0.10
+webrtcvad-wheels>=2.0.10
