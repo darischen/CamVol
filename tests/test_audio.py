@@ -76,6 +76,9 @@ def patched_audio(monkeypatch):
     Patch AudioUtilities.GetSpeakers + comtypes cast so _ctrl() builds
     FakeInterface sentinels without hitting real COM.
     Also patch the enumerator so registration never touches COM.
+
+    Relies on the autouse reset_audio_module fixture to isolate module
+    globals (including _watcher_attempted) before/after each test.
     """
     call_count = {"n": 0}
 
@@ -207,10 +210,8 @@ def test_registration_failure_does_not_break_volume_control(monkeypatch):
         staticmethod(lambda: _BrokenEnumerator()),
     )
 
-    # Module globals need to be clear for this independent test
-    am._volume_ctrl = None
-    am._enumerator = None
-    am._notification_client = None
+    # Module globals are reset by the autouse reset_audio_module fixture, so
+    # this test starts from a clean slate without any manual setup.
 
     # Must not raise; basic volume ops must still work
     vol = am.get_volume()
