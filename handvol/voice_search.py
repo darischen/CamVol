@@ -193,18 +193,25 @@ class VoiceSearch:
         self.is_active = False
         self._lock = threading.Lock()
 
-    def start(self, on_done):
+    def start(self, on_done, resolve=True, press_enter=True):
+        """Begin a recording session on a daemon thread.
+
+        ``resolve``     apply the "go to X" alias table (search mode); set False
+                        for raw dictation that types the transcript verbatim.
+        ``press_enter`` hit Enter after pasting (submit); set False to leave the
+                        text sitting in the field for the user to review.
+        """
         with self._lock:
             if self.is_active:
                 return
             self.is_active = True
         threading.Thread(
-            target=self._run, args=(on_done,), daemon=True
+            target=self._run, args=(on_done, resolve, press_enter), daemon=True
         ).start()
 
-    def _run(self, on_done):
+    def _run(self, on_done, resolve, press_enter):
         try:
-            result = self._record_and_transcribe()
+            result = self._record_and_transcribe(resolve, press_enter)
         except Exception as exc:
             print(f"[voice_search] unexpected error: {exc!r}")
             result = "error"
@@ -216,7 +223,7 @@ class VoiceSearch:
         except Exception as exc:
             print(f"[voice_search] on_done callback raised: {exc!r}")
 
-    def _record_and_transcribe(self):
+    def _record_and_transcribe(self, resolve=True, press_enter=True):
         detector = SilenceDetector()
         vad = webrtcvad.Vad(VAD_AGGRESSIVENESS)
         frames_q = queue.Queue()
@@ -276,10 +283,11 @@ class VoiceSearch:
         if not text:
             return "empty"
 
-        # A "go to X" command resolves to a URL (or the bare site name on a
-        # fuzzy miss); anything else is pasted verbatim for the omnibox to
-        # search. Either way it's a single string down the same paste path.
-        to_type = resolve_destination(text) or text
+        # Search mode resolves "go to X" to a URL (or the bare site name on a
+        # fuzzy miss) and otherwise pastes verbatim. Dictation mode (resolve
+        # False) always types the raw transcript. Either way it's one string
+        # down the same paste path.
+        to_type = (resolve_destination(text) or text) if resolve else text
 
         pyperclip.copy(to_type)
         try:
@@ -293,7 +301,8 @@ class VoiceSearch:
         except Exception as exc:
             print(f"[voice_search] paste failed: {exc!r}")
             return "error"
-        # Small gap so the URL bar finishes ingesting before Enter commits.
-        time.sleep(0.05)
-        pyautogui.press("enter")
+        if press_enter:
+            # Small gap so the field finishes ingesting before Enter commits.
+            time.sleep(0.05)
+            pyautogui.press("enter")
         return "ok"

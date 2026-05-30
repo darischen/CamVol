@@ -31,6 +31,7 @@ class Event(str, Enum):
     PAUSE_CAMERA = "pause_camera"
     TOGGLE_LOCK = "toggle_lock"
     VOICE_SEARCH = "voice_search"
+    VOICE_DICTATE = "voice_dictate"
     CONTROL_W = "control_w"
     CONTROL_TAB = "control_tab"
 
@@ -66,6 +67,7 @@ NUMBER_3 = "Number_3"
 NUMBER_4 = "Number_4"
 NUMBER_5 = "Number_5"
 NUMBER_6 = "Number_6"
+NUMBER_7 = "Number_7"
 NUMBER_9 = "Number_9"
 NUMBER_10 = "Number_10"
 
@@ -97,6 +99,7 @@ class GestureStateMachine:
         self._number_4_count = 0
         self._number_5_count = 0
         self._number_6_count = 0
+        self._number_7_count = 0
         self._number_9_count = 0
         self._number_10_count = 0
         self._hang_loose_count = 0
@@ -124,6 +127,7 @@ class GestureStateMachine:
         self._number_4_count = 0
         self._number_5_count = 0
         self._number_6_count = 0
+        self._number_7_count = 0
         self._number_9_count = 0
         self._number_10_count = 0
         self._hang_loose_count = 0
@@ -150,6 +154,7 @@ class GestureStateMachine:
         self._number_4_count = self._number_4_count + 1 if gesture == NUMBER_4 else 0
         self._number_5_count = self._number_5_count + 1 if gesture == NUMBER_5 else 0
         self._number_6_count = self._number_6_count + 1 if gesture == NUMBER_6 else 0
+        self._number_7_count = self._number_7_count + 1 if gesture == NUMBER_7 else 0
         self._number_9_count = self._number_9_count + 1 if gesture == NUMBER_9 else 0
         self._number_10_count = self._number_10_count + 1 if gesture == NUMBER_10 else 0
         self._hang_loose_count = self._hang_loose_count + 1 if gesture == HANG_LOOSE else 0
@@ -172,7 +177,7 @@ class GestureStateMachine:
         if is_skip or is_prev or gesture in (
             OK_SIGN, FIST, PALM, VICTORY, ILOVEYOU, POINTING_UP,
             MIDDLE_FINGER, DOUBLE_MIDDLE_FINGER, HANG_LOOSE,
-            NUMBER_1, NUMBER_2, NUMBER_3, NUMBER_4, NUMBER_5, NUMBER_6, NUMBER_9, NUMBER_10,
+            NUMBER_1, NUMBER_2, NUMBER_3, NUMBER_4, NUMBER_5, NUMBER_6, NUMBER_7, NUMBER_9, NUMBER_10,
             THREE_FINGERS, FOUR_FINGERS,
         ):
             self._neutral_count = 0
@@ -272,6 +277,11 @@ class GestureStateMachine:
                 self._cooldown_left = COOLDOWN_FRAMES
                 self._reset_counters()
                 return Event.VOICE_SEARCH
+            if self._number_7_count >= TOGGLE_FRAMES:
+                self.state = State.IDLE_COOLDOWN
+                self._cooldown_left = COOLDOWN_FRAMES
+                self._reset_counters()
+                return Event.VOICE_DICTATE
             if self._number_9_count >= TOGGLE_FRAMES:
                 self.state = State.IDLE_COOLDOWN
                 self._cooldown_left = COOLDOWN_FRAMES

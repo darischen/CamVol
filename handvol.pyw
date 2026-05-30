@@ -278,6 +278,27 @@ def capture_loop(args, show_evt, worker_stop, icon, request_pause):
                     icon.icon = make_mic_image()
                     voice_search.start(on_done=on_voice_done)
 
+            elif event is Event.VOICE_DICTATE:
+                # Same mic/VAD/Whisper engine as VOICE_SEARCH, minus the Chrome
+                # peripherals: no tab focus, no new tab, no "go to" resolution,
+                # no Enter. Just transcribe and type into whatever field is
+                # focused right now.
+                if voice_search is None:
+                    if args.debug:
+                        print("  voice dictate unavailable (model failed to load)")
+                elif voice_state["active"]:
+                    if args.debug:
+                        print("  voice dictate already active — ignoring")
+                else:
+                    voice_state["active"] = True
+                    voice_state["was_locked"] = locked
+                    locked = True
+                    if args.debug:
+                        print("  voice dictate start: type into active field")
+                    icon.icon = make_mic_image()
+                    voice_search.start(
+                        on_done=on_voice_done, resolve=False, press_enter=False)
+
             elif event is Event.TOGGLE_LOCK:
                 locked = not locked
                 if args.debug:
@@ -384,7 +405,7 @@ def capture_loop(args, show_evt, worker_stop, icon, request_pause):
                     Event.FOCUS_CHROME_1, Event.FOCUS_CHROME_2,
                     Event.NEXT_TRACK, Event.PREV_TRACK,
                     Event.RESTART_PC, Event.SHUTDOWN_PC, Event.OPEN_TASK_MANAGER, Event.CLOSE_WINDOW,
-                    Event.PAUSE_CAMERA, Event.VOICE_SEARCH,
+                    Event.PAUSE_CAMERA, Event.VOICE_SEARCH, Event.VOICE_DICTATE,
                     Event.CONTROL_W, Event.CONTROL_TAB,
                 ):
                     print(f"[{machine.state.value:14s}] gesture={gesture:14s} "
