@@ -8,3 +8,6 @@ models/*.task
 .vscode/
 .idea/
 data/
+dist/
+cache/
+build/
