@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub Release (false = build artifact only, dry run)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Serialize releases so two quick merges can't race on the same tag: the second
+# run starts only after the first has pushed its tag, so it computes the next
+# patch correctly.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Auto-release on push unless the tip commit opts out with [skip release].
+    # Manual (workflow_dispatch) runs always proceed.
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]') }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout (with LFS model + full tag history)
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Ensure NSIS is available
+        shell: pwsh
+        run: |
+          $nsisExe = "C:\Program Files (x86)\NSIS\makensis.exe"
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and -not (Test-Path $nsisExe)) {
+            choco install nsis -y --no-progress
+          }
+          # Put the standard NSIS dir on PATH for later steps (no-op if already there).
+          $nsisDir = "C:\Program Files (x86)\NSIS"
+          if (Test-Path $nsisDir) {
+            Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
+          }
+          # Fail loudly now if makensis still isn't resolvable, rather than letting
+          # the build step die later with a confusing error. (Checks the file path
+          # directly because the GITHUB_PATH append only affects subsequent steps.)
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and -not (Test-Path $nsisExe)) {
+            Write-Error "makensis not found after NSIS install attempt"
+            exit 1
+          }
+
+      - name: Compute next version
+        id: ver
+        shell: bash
+        run: |
+          VERSION="$(python installer/compute_version.py)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Next version: $VERSION"
+
+      - name: Build installer
+        shell: bash
+        run: python build_installer.py --version "${{ steps.ver.outputs.version }}"
+
+      - name: Publish GitHub Release
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          gh release create "v${VERSION}" \
+            "dist/HandVol-${VERSION}-Installer.exe" \
+            --title "HandVol v${VERSION}" \
+            --generate-notes
+
+      - name: Upload installer artifact (dry run)
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: HandVol-Installer
+          path: dist/HandVol-*-Installer.exe
+          if-no-files-found: error

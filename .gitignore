@@ -4,10 +4,12 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
-models/*.task
 .vscode/
 .idea/
 data/
+
+# Installer build artifacts
+build/
 dist/
 cache/
-build/
+*.exe
