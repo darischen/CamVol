@@ -12,9 +12,24 @@ _volume_ctrl = None
 _enumerator = None
 _notification_client = None
 
+# Sentinel: True once _ensure_watcher() has been attempted (success or failure).
+# Prevents expensive cross-process COM calls (GetDeviceEnumerator +
+# RegisterEndpointNotificationCallback) from being retried on every _ctrl()
+# invocation when registration permanently fails.
+_watcher_attempted = False
+
 
 class _DefaultDeviceWatcher(MMNotificationClient):
-    """Calls _reset_ctrl() when the default render endpoint changes."""
+    """Calls _reset_ctrl() when the default render endpoint changes.
+
+    This callback fires on pycaw's COM/MTA thread.  The bare assignment in
+    _reset_ctrl() is intentionally lock-free: under the GIL, a single pointer
+    store is atomic, so there is no corruption risk.  If the gesture worker
+    thread happens to receive a just-invalidated pointer for one frame the next
+    COM call raises COMError, the existing except path calls _reset_ctrl() and
+    the caller retries on the following frame — i.e. at most one dropped frame,
+    self-healing with no added locking overhead.
+    """
 
     def on_default_device_changed(self, flow, flow_id, role, role_id, default_device_id):
         # Only the render direction matters; ignore microphone / comms changes.
@@ -27,12 +42,15 @@ def _ensure_watcher():
 
     If COM is not available on this thread the registration is skipped
     gracefully — volume control still works via the existing except-based
-    _reset_ctrl() fallback.
+    _reset_ctrl() fallback.  The attempt is made at most once for the app's
+    lifetime: once _watcher_attempted is True the function returns immediately,
+    avoiding repeated cross-process COM calls when registration fails permanently.
     """
-    global _enumerator, _notification_client
-    if _notification_client is not None:
-        # Already registered; nothing to do.
+    global _enumerator, _notification_client, _watcher_attempted
+    if _watcher_attempted:
+        # Already attempted (success or failure); nothing to do.
         return
+    _watcher_attempted = True
     try:
         client = _DefaultDeviceWatcher()
         enumerator = AudioUtilities.GetDeviceEnumerator()
@@ -42,6 +60,8 @@ def _ensure_watcher():
         _notification_client = client
     except Exception:
         # Graceful degradation: watcher could not be registered; fall through.
+        # Volume control continues to work via the except-based fallback in
+        # set_volume / get_volume / toggle_mute / is_muted.
         pass
 
 
@@ -60,12 +80,12 @@ def _ctrl():
 
 
 def _reset_ctrl():
+    # Intentionally lock-free — see _DefaultDeviceWatcher docstring for rationale.
     global _volume_ctrl
     _volume_ctrl = None
 
 
 def set_volume(percent):
-    global _volume_ctrl
     percent = max(0.0, min(100.0, float(percent)))
     try:
         _ctrl().SetMasterVolumeLevelScalar(percent / 100.0, None)
@@ -75,7 +95,6 @@ def set_volume(percent):
 
 
 def get_volume():
-    global _volume_ctrl
     try:
         return _ctrl().GetMasterVolumeLevelScalar() * 100.0
     except Exception:
@@ -84,7 +103,6 @@ def get_volume():
 
 
 def toggle_mute():
-    global _volume_ctrl
     try:
         c = _ctrl()
         c.SetMute(not c.GetMute(), None)
@@ -94,7 +112,6 @@ def toggle_mute():
 
 
 def is_muted():
-    global _volume_ctrl
     try:
         return bool(_ctrl().GetMute())
     except Exception:

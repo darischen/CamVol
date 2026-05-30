@@ -62,10 +62,12 @@ def reset_audio_module():
     audio_mod._volume_ctrl = None
     audio_mod._enumerator = None
     audio_mod._notification_client = None
+    audio_mod._watcher_attempted = False
     yield
     audio_mod._volume_ctrl = None
     audio_mod._enumerator = None
     audio_mod._notification_client = None
+    audio_mod._watcher_attempted = False
 
 
 @pytest.fixture
@@ -215,7 +217,55 @@ def test_registration_failure_does_not_break_volume_control(monkeypatch):
     assert isinstance(vol, float)
     am.set_volume(50)
     assert call_count["n"] >= 1
+    # (no manual teardown needed — autouse reset_audio_module handles it)
 
-    am._volume_ctrl = None
-    am._enumerator = None
-    am._notification_client = None
+
+def test_failed_registration_is_not_retried(monkeypatch):
+    """
+    When registration fails permanently, _ensure_watcher() must attempt
+    GetDeviceEnumerator exactly once — not on every _ctrl() call.
+
+    Regression test for the pathological-retry bug: if _watcher_attempted
+    is not set on failure, every get_volume() / set_volume() call would
+    re-run expensive cross-process COM setup.
+    """
+    import pycaw.pycaw as pycaw_mod
+    import handvol.audio as am
+
+    call_count = {"n": 0}
+
+    def fake_get_speakers():
+        call_count["n"] += 1
+        return _FakeDevice(identity=call_count["n"])
+
+    monkeypatch.setattr(pycaw_mod.AudioUtilities, "GetSpeakers", staticmethod(fake_get_speakers))
+    monkeypatch.setattr(am, "cast", lambda obj, ptr_type: obj)
+
+    enum_call_count = {"n": 0}
+
+    class _BrokenEnumerator:
+        def RegisterEndpointNotificationCallback(self, client):
+            raise OSError("COM not initialized")
+
+    def fake_get_enumerator():
+        enum_call_count["n"] += 1
+        return _BrokenEnumerator()
+
+    monkeypatch.setattr(
+        pycaw_mod.AudioUtilities,
+        "GetDeviceEnumerator",
+        staticmethod(fake_get_enumerator),
+    )
+
+    # Drive multiple volume calls, resetting the volume interface each time
+    # to force _ctrl() (and therefore _ensure_watcher()) to run on every call.
+    # Registration fails on the first attempt; without the sentinel fix, every
+    # subsequent call would retry GetDeviceEnumerator unnecessarily.
+    for _ in range(5):
+        am._volume_ctrl = None  # force _ctrl() to re-enter on the next call
+        am.get_volume()
+
+    assert enum_call_count["n"] == 1, (
+        "GetDeviceEnumerator must be called at most once even when registration "
+        f"permanently fails (was called {enum_call_count['n']} times)"
+    )
