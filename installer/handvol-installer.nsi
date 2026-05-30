@@ -11,6 +11,10 @@
   !error "PROJ_ROOT is not defined. Build via build_installer.py (it passes /DPROJ_ROOT)."
 !endif
 
+!ifndef VERSION
+  !define VERSION "0.0.0-dev"
+!endif
+
 !include "MUI2.nsh"
 !include "x64.nsh"
 !include "nsDialogs.nsh"
@@ -18,7 +22,7 @@
 
 ; Name and file
 Name "HandVol"
-OutFile "${PROJ_ROOT}\dist\HandVol-Installer.exe"
+OutFile "${PROJ_ROOT}\dist\HandVol-${VERSION}-Installer.exe"
 InstallDir "$PROGRAMFILES64\HandVol"
 InstallDirRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "InstallLocation"
 
@@ -69,7 +73,7 @@ Section "Install"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "DisplayName" "HandVol"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "UninstallString" "$INSTDIR\uninstall.exe"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "DisplayVersion" "1.0"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "DisplayVersion" "${VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "Publisher" "HandVol"
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "NoModify" 1
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\HandVol" "NoRepair" 1

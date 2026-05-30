@@ -9,7 +9,7 @@ Orchestrates, in order:
   4. Bootstrap pip into the embeddable runtime (get-pip.py)
   5. pip install -r requirements.txt into the bundled runtime
   6. Copy the MediaPipe model (from Git LFS) and HandVol source
-  7. Compile the NSIS script -> dist/HandVol-Installer.exe
+  7. Compile the NSIS script -> dist/HandVol-<version>-Installer.exe
 
 Why steps 3-4 exist (and aren't in a "plain" embeddable build):
 The python-x.y.z-embed-amd64.zip distribution intentionally ships WITHOUT pip
@@ -19,6 +19,7 @@ even hand-copied packages won't import at runtime. So we patch the ._pth first,
 then bootstrap pip, then install normally into Lib\\site-packages.
 """
 
+import argparse
 import re
 import sys
 import shutil
@@ -38,6 +39,7 @@ GET_PIP_CACHE = CACHE_DIR / "get-pip.py"
 BUILD_DIR = REPO_ROOT / "build"
 DIST_DIR = REPO_ROOT / "dist"
 PYTHON_DIR = BUILD_DIR / "python"
+NSIS_SCRIPT = REPO_ROOT / "installer" / "handvol-installer.nsi"
 
 
 def log(msg):
@@ -163,11 +165,26 @@ def copy_handvol_source():
     log("OK  copied HandVol source")
 
 
-def compile_nsis():
-    """Compile the NSIS script into dist/HandVol-Installer.exe."""
-    nsis_script = REPO_ROOT / "installer" / "handvol-installer.nsi"
-    if not nsis_script.exists():
-        log(f"ERR NSIS script not found at {nsis_script}")
+def _makensis_command(makensis, version):
+    """Build the makensis argv. Passing PROJ_ROOT and VERSION as /D defines lets
+    the .nsi resolve all paths from the repo root and bake the version in."""
+    return [
+        makensis,
+        f"/DPROJ_ROOT={REPO_ROOT}",
+        f"/DVERSION={version}",
+        str(NSIS_SCRIPT),
+    ]
+
+
+def _installer_exe_path(version):
+    """Path of the versioned installer the .nsi emits (OutFile mirrors this)."""
+    return DIST_DIR / f"HandVol-{version}-Installer.exe"
+
+
+def compile_nsis(version):
+    """Compile the NSIS script into dist/HandVol-<version>-Installer.exe."""
+    if not NSIS_SCRIPT.exists():
+        log(f"ERR NSIS script not found at {NSIS_SCRIPT}")
         sys.exit(1)
 
     makensis = shutil.which("makensis")
@@ -178,26 +195,36 @@ def compile_nsis():
         sys.exit(1)
 
     DIST_DIR.mkdir(exist_ok=True)
-    log("Compiling NSIS script ...")
-    # Pass the absolute repo root as a define. makensis resolves relative
-    # File/OutFile paths against the .nsi's own directory, so the script builds
-    # every path from ${PROJ_ROOT} instead of relying on cwd.
+    log(f"Compiling NSIS script (version {version}) ...")
     result = subprocess.run(
-        [makensis, f"/DPROJ_ROOT={REPO_ROOT}", str(nsis_script)],
+        _makensis_command(makensis, version),
         capture_output=True, text=True,
     )
     if result.returncode != 0:
         log(f"ERR NSIS compilation failed:\n{result.stdout}\n{result.stderr}")
         sys.exit(1)
 
-    exe_path = DIST_DIR / "HandVol-Installer.exe"
+    exe_path = _installer_exe_path(version)
     if not exe_path.exists():
         log(f"ERR installer not found at {exe_path} after compile")
         sys.exit(1)
     log(f"OK  built {exe_path} ({exe_path.stat().st_size / 1024**2:.1f} MB)")
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Build the HandVol Windows installer.")
+    parser.add_argument(
+        "--version",
+        default="0.0.0-dev",
+        help="Version baked into the installer (DisplayVersion + output "
+             "filename). Defaults to 0.0.0-dev for local builds.",
+    )
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     log("HandVol Windows Installer Builder")
     log("=" * 50)
 
@@ -219,10 +246,10 @@ def main():
     install_pip_packages()
     copy_mediapipe_model()
     copy_handvol_source()
-    compile_nsis()
+    compile_nsis(args.version)
 
     log("=" * 50)
-    log(f"Build complete! Installer: {DIST_DIR / 'HandVol-Installer.exe'}")
+    log(f"Build complete! Installer: {_installer_exe_path(args.version)}")
 
 
 if __name__ == "__main__":
