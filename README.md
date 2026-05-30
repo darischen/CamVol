@@ -22,11 +22,12 @@ to restart your PC, or double middle finger to shut it down.
 | Fist + 3 fingers | Number 3 — Focus Discord (launch it if not running) |
 | Fist + 4 fingers | Number 4 — Focus VS Code (launch it if not running) |
 | Fist + Open palm | Number 5 — Open Task Manager (Ctrl+Shift+Esc) |
-| Open palm + Pointer | Number 6 — Voice search (focus Chrome, Ctrl+T, dictate, auto-Enter after 1s silence) |
-| Open palm + Victory | Number 7 |
-| Open palm + 3 fingers | Number 8 |
+| Open palm + Pointer | Number 6 — Voice search (focus Chrome, Ctrl+T, dictate, auto-Enter after 1s silence; say "go to <domain>" for popular links) |
+| Open palm + Victory | Number 7 — Text input field (type directly into active field) |
 | Open palm + 4 fingers | Number 9 — Lock Gesture |
 | Open palm + Open palm | Number 10 — Close active window (Alt+F4) |
+| 3 extended fingers | Ctrl+W — Close active tab |
+| 4 extended fingers | Ctrl+Tab — Cycle to next tab |
 | 🖕 Single middle finger (3s hold) | **Restart Windows** |
 | 🖕🖕 Double middle finger (3s hold) | **Shut down Windows** |
 
@@ -56,8 +57,10 @@ open a new tab, and start dictating. Your speech is transcribed locally
 with `faster-whisper` (`small.en`, int8, CPU) — no cloud calls. The tray
 icon turns into a red microphone and HandVol auto-locks gestures while
 recording. After 1 second of silence, the transcript is typed into the
-URL bar and Enter fires automatically. If no speech is detected within
-~5 seconds, the trigger times out cleanly with no typing.
+URL bar and Enter fires automatically. Say "go to <domain>" to navigate
+directly to popular sites (e.g., "go to GitHub" → github.com). If no
+speech is detected within ~5 seconds, the trigger times out cleanly with
+no typing.
 
 First invocation downloads the `small.en` model (~460 MB) into the
 HuggingFace cache.
@@ -111,6 +114,12 @@ the full 3.0 seconds.
 | `--debug` | Print frame-by-frame state and scrub values. |
 | `--no-audio` | Skip all pycaw/media calls — overlay only, for tuning. |
 | `--show` | Start with the preview window already open (otherwise tray-only). |
+
+## Installation
+
+An NSIS installer is available for easy installation and updates. The installer
+automatically detects and removes old versions before installing the new one,
+ensuring a clean upgrade path.
 
 ## Launch silently at startup
 
